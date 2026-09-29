@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "build:win": "electron-builder --win nsis zip --x64"
+    "build:win": "electron-builder --win nsis zip --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^44.4.5",
