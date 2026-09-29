@@ -1,0 +1,35 @@
+import XCTest
+@testable import FieldScout
+
+final class ScanPayloadServiceTests: XCTestCase {
+    func testParsesNamedScannerPayload() throws {
+        let result = try ScanPayloadService.parse("team=254;match=12;brokeDown=no")
+
+        XCTAssertEqual(result, .named([
+            ("team", "254"),
+            ("match", "12"),
+            ("brokeDown", "no")
+        ]))
+    }
+
+    func testParsesJSONScannerPayload() throws {
+        let result = try ScanPayloadService.parse("{\"Team\":254,\"Broke Down\":false}")
+
+        XCTAssertEqual(result, .named([
+            ("Broke Down", "No"),
+            ("Team", "254")
+        ]))
+    }
+
+    func testParsesCSVScannerPayloadInSheetOrder() throws {
+        let result = try ScanPayloadService.parse("Alex,12,254,\"Fast, reliable\"")
+
+        XCTAssertEqual(result, .positional(["Alex", "12", "254", "Fast, reliable"]))
+    }
+
+    func testRejectsUnknownPackedPayloadInsteadOfDroppingIt() {
+        XCTAssertThrowsError(try ScanPayloadService.parse("UNKNOWNPACKEDVALUE")) { error in
+            XCTAssertEqual(error as? ScanPayloadError, .unsupported)
+        }
+    }
+}

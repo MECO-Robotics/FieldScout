@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+work/
+
+# Generated local bundles and release archives are published through GitHub Releases.
+outputs/FieldScout.app/
+outputs/*.zip
+
+*.xcuserstate
+xcuserdata/
