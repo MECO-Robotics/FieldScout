@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const core = require("../src/core.js");
+const packageConfig = require("../package.json");
 
 function populatedQRScoutDocument(rows) {
   const document = core.createDocument();
@@ -10,6 +11,16 @@ function populatedQRScoutDocument(rows) {
   }));
   return document;
 }
+
+test("Windows installer is configured for GitHub auto-updates", () => {
+  assert.equal(packageConfig.dependencies["electron-updater"], "^6.8.9");
+  assert.deepEqual(packageConfig.build.publish, {
+    provider: "github",
+    owner: "MECO-Robotics",
+    repo: "FieldScout"
+  });
+  assert.equal(packageConfig.build.nsis.oneClick, false);
+});
 
 test("starter sheet exactly matches the 29-field QRScout contract", () => {
   const document = core.createDocument();

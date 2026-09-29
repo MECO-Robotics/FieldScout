@@ -1,0 +1,136 @@
+name: Build and publish FieldScout
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and macOS version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          test "$tag_version" = "$app_version"
+
+      - name: Test macOS data engine
+        run: swift test
+
+      - name: Package universal macOS app
+        run: |
+          ./Scripts/package-app.sh
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          ditto -c -k --sequesterRsrc --keepParent outputs/FieldScout.app "outputs/FieldScout-${version}-macOS.zip"
+
+      - name: Generate signed Sparkle update feed
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_VERSION: "2.10.0"
+          SPARKLE_ARCHIVE_SHA256: "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c"
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY"
+          mkdir -p update-feed sparkle-tools
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          archive="outputs/FieldScout-${version}-macOS.zip"
+          cp "$archive" update-feed/
+          curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o sparkle-tools.tar.xz
+          echo "${SPARKLE_ARCHIVE_SHA256}  sparkle-tools.tar.xz" | shasum -a 256 -c -
+          tar -xJf sparkle-tools.tar.xz -C sparkle-tools
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | sparkle-tools/bin/generate_appcast \
+            --ed-key-file - \
+            --maximum-deltas 0 \
+            --download-url-prefix "https://github.com/MECO-Robotics/FieldScout/releases/download/${GITHUB_REF_NAME}/" \
+            --link "https://github.com/MECO-Robotics/FieldScout/releases/tag/${GITHUB_REF_NAME}" \
+            -o "$GITHUB_WORKSPACE/update-feed/appcast.xml" \
+            update-feed
+
+      - name: Upload macOS release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: FieldScout-macOS
+          path: |
+            outputs/FieldScout-*-macOS.zip
+            update-feed/appcast.xml
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Windows
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Windows/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate tag and Windows version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart('v')
+          $appVersion = node -p "require('./package.json').version"
+          if ($tagVersion -ne $appVersion) { throw "Tag $tagVersion does not match Windows version $appVersion" }
+
+      - name: Test Windows data engine
+        run: npm test
+
+      - name: Package Windows installer and portable archive
+        run: npm run build:win
+
+      - name: Upload Windows release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: FieldScout-Windows
+          path: |
+            Windows/dist/*.exe
+            Windows/dist/*.zip
+            Windows/dist/*.yml
+            Windows/dist/*.blockmap
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish complete GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --title "FieldScout ${version}" --generate-notes
+          fi
+          gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false

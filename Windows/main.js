@@ -3,6 +3,9 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 
 let mainWindow;
+let autoUpdater;
+let updateCheckInProgress = false;
+let manualUpdateCheck = false;
 
 app.setName("FieldScout");
 if (process.platform === "win32") app.setAppUserModelId("org.mecorobotics.fieldscout");
@@ -65,6 +68,86 @@ async function createWindow() {
   await mainWindow.loadFile(path.join(__dirname, "src", "index.html"));
 }
 
+function sendUpdateStatus(status) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("update:status", status);
+}
+
+async function checkForUpdates(userInitiated = false) {
+  if (!autoUpdater) {
+    const message = app.isPackaged
+      ? "Automatic updates are only available in the installed Windows app."
+      : "Update checks are available in packaged builds.";
+    if (userInitiated) sendUpdateStatus({ state: "error", message });
+    return { started: false, message };
+  }
+  if (updateCheckInProgress) return { started: false, message: "An update check is already running." };
+
+  manualUpdateCheck = userInitiated;
+  updateCheckInProgress = true;
+  sendUpdateStatus({ state: "checking", message: "Checking for updates…" });
+  try {
+    await autoUpdater.checkForUpdates();
+    return { started: true };
+  } catch (error) {
+    updateCheckInProgress = false;
+    if (userInitiated) sendUpdateStatus({ state: "error", message: `Update check failed: ${error.message}` });
+    else sendUpdateStatus({ state: "idle", message: "" });
+    console.error("FieldScout update check failed:", error);
+    return { started: false, message: error.message };
+  }
+}
+
+function configureAutomaticUpdates() {
+  if (!app.isPackaged || process.platform !== "win32") return;
+
+  ({ autoUpdater } = require("electron-updater"));
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = console;
+
+  autoUpdater.on("update-available", (info) => {
+    sendUpdateStatus({ state: "downloading", message: `Downloading FieldScout ${info.version}…`, version: info.version });
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateStatus({
+      state: "downloading",
+      message: `Downloading update… ${Math.round(progress.percent)}%`,
+      percent: progress.percent
+    });
+  });
+  autoUpdater.on("update-not-available", () => {
+    updateCheckInProgress = false;
+    if (manualUpdateCheck) sendUpdateStatus({ state: "current", message: "FieldScout is up to date." });
+    else sendUpdateStatus({ state: "idle", message: "" });
+    manualUpdateCheck = false;
+  });
+  autoUpdater.on("error", (error) => {
+    updateCheckInProgress = false;
+    if (manualUpdateCheck) sendUpdateStatus({ state: "error", message: `Update failed: ${error.message}` });
+    else sendUpdateStatus({ state: "idle", message: "" });
+    manualUpdateCheck = false;
+    console.error("FieldScout updater error:", error);
+  });
+  autoUpdater.on("update-downloaded", async (info) => {
+    updateCheckInProgress = false;
+    manualUpdateCheck = false;
+    sendUpdateStatus({ state: "ready", message: `FieldScout ${info.version} is ready to install.`, version: info.version });
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "FieldScout update ready",
+      message: `FieldScout ${info.version} has been downloaded.`,
+      detail: "Restart FieldScout to finish the update. Your scouting data and backups will stay in place.",
+      buttons: ["Restart and update", "Later"],
+      defaultId: 0,
+      cancelId: 1
+    });
+    if (result.response === 0) autoUpdater.quitAndInstall(false, true);
+  });
+
+  setTimeout(() => checkForUpdates(false), 5_000);
+  setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1_000);
+}
+
 ipcMain.handle("document:load", async () => {
   try {
     return JSON.parse(await fs.readFile(dataFileURL(), "utf8"));
@@ -100,6 +183,7 @@ ipcMain.handle("backup:restore", async (_event, name) => {
   return JSON.parse(await fs.readFile(path.join(backupDirectoryURL(), name), "utf8"));
 });
 ipcMain.handle("clipboard:readText", () => clipboard.readText());
+ipcMain.handle("update:check", () => checkForUpdates(true));
 
 ipcMain.handle("csv:import", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -129,6 +213,7 @@ ipcMain.handle("csv:export", async (_event, csvText, suggestedName) => {
 
 app.whenReady().then(async () => {
   await createWindow();
+  configureAutomaticUpdates();
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow();
   });

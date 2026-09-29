@@ -39,6 +39,22 @@
     node.style.color = isError ? "#ff8999" : "";
   }
 
+  function showUpdateStatus(status) {
+    const node = byId("update-status");
+    if (status.state === "idle") {
+      node.hidden = true;
+      byId("update-button").disabled = false;
+      return;
+    }
+    node.hidden = false;
+    node.textContent = status.message;
+    node.className = `update-status ${status.state || ""}`;
+    byId("update-button").disabled = ["checking", "downloading"].includes(status.state);
+    if (["current", "error"].includes(status.state)) {
+      window.setTimeout(() => { node.hidden = true; }, 8_000);
+    }
+  }
+
   function snapshotDocument() {
     return JSON.parse(JSON.stringify(state.document));
   }
@@ -640,6 +656,7 @@
     byId("paste-rows-button").addEventListener("click", pasteRows);
     byId("import-button").addEventListener("click", importCSV);
     byId("export-button").addEventListener("click", exportCSV);
+    byId("update-button").addEventListener("click", () => desktop.checkForUpdates());
     byId("ranking-metric").addEventListener("change", (event) => { state.rankingMetric = event.target.value; renderRankings(); });
     byId("team-select").addEventListener("change", (event) => { state.selectedTeam = Number(event.target.value) || null; renderCharts(); });
     byId("accept-scan-button").addEventListener("click", acceptScan);
@@ -686,6 +703,7 @@
 
   async function initialize() {
     bindEvents();
+    desktop.onUpdateStatus(showUpdateStatus);
     try {
       state.document = core.normalizeDocument(await desktop.loadDocument());
     } catch (error) {

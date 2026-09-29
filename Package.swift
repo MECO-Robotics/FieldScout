@@ -7,15 +7,33 @@ let package = Package(
     products: [
         .executable(name: "FieldScout", targets: ["FieldScout"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
+    ],
     targets: [
         .executableTarget(
             name: "FieldScout",
-            path: "Sources/FieldScout"
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
+            path: "Sources/FieldScout",
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks"
+                ])
+            ]
         ),
         .testTarget(
             name: "FieldScoutTests",
             dependencies: ["FieldScout"],
-            path: "Tests/FieldScoutTests"
+            path: "Tests/FieldScoutTests",
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@loader_path/../../.."
+                ])
+            ]
         )
     ]
 )

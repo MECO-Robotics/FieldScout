@@ -9,5 +9,11 @@ contextBridge.exposeInMainWorld("fieldScoutDesktop", Object.freeze({
   readClipboardText: () => ipcRenderer.invoke("clipboard:readText"),
   importCSV: () => ipcRenderer.invoke("csv:import"),
   exportCSV: (csvText, suggestedName) => ipcRenderer.invoke("csv:export", csvText, suggestedName),
+  checkForUpdates: () => ipcRenderer.invoke("update:check"),
+  onUpdateStatus: (callback) => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on("update:status", listener);
+    return () => ipcRenderer.removeListener("update:status", listener);
+  },
   platform: "windows"
 }));

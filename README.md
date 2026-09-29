@@ -1,6 +1,6 @@
 # FieldScout
 
-FieldScout is a fully offline desktop spreadsheet for FRC field-scouting data on macOS and Windows. Raw scouting entries stay in the sheet while team summaries, charts, and rankings are calculated as separate views.
+FieldScout is an offline-first desktop spreadsheet for FRC field-scouting data on macOS and Windows. Raw scouting entries stay in the sheet while team summaries, charts, and rankings are calculated as separate views.
 
 The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identity, combining a scouting grid with a rising performance trajectory.
 
@@ -23,15 +23,25 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 - Team match-trend and scoring-composition charts
 - Offline questions about top teams, reliability, offense, defense, and team comparisons
 - Automatic local persistence in `Application Support/FieldScout/scouting-data.json`
+- Automatic app updates from signed GitHub Releases on installed macOS and Windows builds
 
-No account, server, API key, or internet connection is used.
+No account, server, or API key is required. Scouting, analytics, scanning, import/export, and backups work without internet and never upload scouting data. FieldScout only uses the internet to check GitHub Releases for app updates.
 
 ## Download
 
 Download the current packaged macOS and Windows builds from [GitHub Releases](https://github.com/MECO-Robotics/FieldScout/releases/latest).
 
-- **Windows:** use the `.exe` installer or extract the portable Windows `.zip`. The Windows build is currently unsigned, so Microsoft Defender SmartScreen may show an unknown-publisher warning.
-- **macOS:** requires macOS 14 or newer. The build is ad-hoc signed but not Apple-notarized, so macOS may require opening it with Control-click → **Open** the first time.
+- **Windows:** use the `.exe` installer for automatic updates. The portable `.zip` remains available, but it must be replaced manually for each release. The Windows build is currently unsigned, so Microsoft Defender SmartScreen may show an unknown-publisher warning.
+- **macOS:** requires macOS 14 or newer and supports both Apple silicon and Intel. The build is ad-hoc signed but not Apple-notarized, so macOS may require opening it with Control-click → **Open** the first time.
+
+## Automatic updates
+
+Version 0.5.0 is the first updater-enabled release. Anyone running 0.4.0 or earlier must install 0.5.0 once; after that, installed copies can update themselves without downloading and reinstalling the app manually.
+
+- macOS checks the signed Sparkle feed and can download, install, and relaunch into a new version. Use **FieldScout → Check for Updates…** to check immediately.
+- The installed Windows app checks shortly after launch and every six hours, downloads a newer release in the background, and asks to restart when it is ready. Use the **Updates** toolbar button to check immediately.
+- Updates preserve the scouting document and local backups. macOS archives are verified with an Ed25519 signature; Windows installers are verified against the SHA-512 value in the generated update manifest.
+- GitHub Releases is only needed for update checks and downloads. If an event has no internet connection, FieldScout continues working normally and checks again later.
 
 ## Use an iPad app and barcode scanner
 
@@ -86,7 +96,7 @@ To produce a standalone app bundle:
 open outputs/FieldScout.app
 ```
 
-The generated app is ad-hoc signed for local use. It is not notarized for public distribution. The packaged build includes the MECO app icon in its bundle and also applies it directly to the running app so the Dock uses the correct artwork.
+The generated app is a universal Intel/Apple-silicon build and includes Sparkle. It is ad-hoc signed for local use and is not notarized for public distribution. The packaged build includes the MECO app icon in its bundle and also applies it directly to the running app so the Dock uses the correct artwork.
 
 ## Run it on Windows
 
@@ -104,7 +114,9 @@ To build the Windows installer and portable archive from Windows:
 npm run build:win
 ```
 
-GitHub Actions runs the same tests and packaging command on a Windows runner whenever a version tag is pushed. Windows scouting data is stored locally in `%APPDATA%\FieldScout\scouting-data.json`; no account, API key, or internet connection is needed while using the app.
+GitHub Actions tests and packages both platforms whenever a version tag is pushed. It publishes the macOS Sparkle feed plus the Windows `latest.yml` manifest alongside the installers. Windows scouting data is stored locally in `%APPDATA%\FieldScout\scouting-data.json`; internet is only needed to check for and download updates.
+
+For a release, update `CFBundleShortVersionString` in `Resources/Info.plist` and `version` in `Windows/package.json` to the same value, increment the macOS `CFBundleVersion`, then push a matching `vX.Y.Z` tag. The release workflow rejects a tag whose version does not match either app.
 
 ## Import existing scouting data
 

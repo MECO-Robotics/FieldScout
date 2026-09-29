@@ -89,6 +89,23 @@ button:disabled { opacity: 0.42; cursor: default; }
   pointer-events: none;
 }
 
+.update-status {
+  position: fixed;
+  left: 25px;
+  bottom: 16px;
+  z-index: 20;
+  border: 1px solid #31577e;
+  border-radius: 99px;
+  padding: 6px 10px;
+  background: rgba(7, 17, 31, 0.94);
+  color: var(--blue-2);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.update-status.error { border-color: #7c3442; color: #ff8999; }
+.update-status.ready { border-color: #28755c; color: var(--green); }
+
 .workspace {
   height: calc(100vh - 82px);
   display: grid;
