@@ -4,23 +4,54 @@ struct RankingsSidebar: View {
     @EnvironmentObject private var store: SpreadsheetStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Team Rankings")
-                .font(.title3.bold())
-
-            Picker("Rank by", selection: $store.rankingMetric) {
-                ForEach(RankingMetric.allCases) { metric in
-                    Text(metric.rawValue).tag(metric)
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Team Rankings")
+                    .font(.title3.bold())
+                Spacer()
+                Text("\(store.rankedTeams.count)")
+                    .font(.caption.bold().monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.quaternary, in: Capsule())
             }
-            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("RANK BY")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                Picker("Rank by", selection: $store.rankingMetric) {
+                    ForEach(RankingMetric.allCases) { metric in
+                        Text(metric.rawValue).tag(metric)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if store.rankedTeams.isEmpty {
-                ContentUnavailableView(
-                    "No ranked teams",
-                    systemImage: "list.number",
-                    description: Text("Map a Team Number column and add scouting rows.")
-                )
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 56, height: 56)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+                    Text("No ranked teams yet")
+                        .font(.headline)
+                    Text("Scan a QRScout barcode or enter a team number to build the rankings.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Open Scanner Intake") {
+                        store.selection = .scanner
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 24)
+                .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -54,13 +85,17 @@ struct RankingsSidebar: View {
                                             .help("\((team.breakdownRate * 100).formatted(.number.precision(.fractionLength(0))))% breakdown rate")
                                     }
                                 }
-                                .padding(8)
+                                .padding(10)
                                 .background(
                                     store.selectedTeamNumber == team.teamNumber
                                         ? Color.accentColor.opacity(0.14)
-                                        : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 8)
+                                        : Color(nsColor: .windowBackgroundColor).opacity(0.55),
+                                    in: RoundedRectangle(cornerRadius: 10)
                                 )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.primary.opacity(0.06))
+                                }
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -81,9 +116,12 @@ struct RankingsSidebar: View {
                     }
                 }
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(16)
-        .background(.background.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(18)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
     }
 
     private func annotationColor(_ flag: TeamFlag) -> Color {

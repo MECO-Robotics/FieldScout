@@ -8,6 +8,9 @@ struct SpreadsheetView: View {
     var body: some View {
         VStack(spacing: 0) {
             sheetHeader
+            if meaningfulRowCount == 0 {
+                gettingStartedBanner
+            }
             Divider()
             if store.document.columns.isEmpty {
                 ContentUnavailableView(
@@ -19,36 +22,7 @@ struct SpreadsheetView: View {
                 grid
             }
         }
-        .navigationTitle(store.document.title)
-        .toolbar {
-            ToolbarItemGroup {
-                Button(action: store.importCSV) {
-                    Label("Import CSV", systemImage: "square.and.arrow.down")
-                }
-                Button(action: store.exportCSV) {
-                    Label("Export CSV", systemImage: "square.and.arrow.up")
-                }
-                Button {
-                    store.pasteRowsFromClipboard()
-                } label: {
-                    Label("Paste Rows", systemImage: "doc.on.clipboard")
-                }
-                Button(action: store.undo) {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
-                }
-                .disabled(!store.canUndo)
-                Button(action: store.redo) {
-                    Label("Redo", systemImage: "arrow.uturn.forward")
-                }
-                .disabled(!store.canRedo)
-                Button { showingAddColumn = true } label: {
-                    Label("Add Column", systemImage: "rectangle.split.3x1.fill")
-                }
-                Button(action: store.addRow) {
-                    Label("Add Row", systemImage: "plus")
-                }
-            }
-        }
+        .navigationTitle("Scouting Sheet")
         .sheet(isPresented: $showingAddColumn) {
             ColumnEditor(title: "Add Column") { name, type, role in
                 store.addColumn(name: name, type: type, role: role)
@@ -66,98 +40,233 @@ struct SpreadsheetView: View {
     }
 
     private var sheetHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(store.document.title)
-                    .font(.title2.bold())
-                Text("\(store.document.rows.count) rows • autosaved locally")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(store.document.title)
+                        .font(.title2.bold())
+                    Text("Field scouting workspace")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 7) {
+                    summaryPill("\(meaningfulRowCount) entries", systemImage: "list.bullet.rectangle")
+                    summaryPill("\(store.document.columns.count) columns", systemImage: "rectangle.split.3x1")
+                    if store.qualitySummary.rowsNeedingAttention > 0 {
+                        summaryPill(
+                            "\(store.qualitySummary.rowsNeedingAttention) need attention",
+                            systemImage: "exclamationmark.triangle.fill",
+                            color: .orange
+                        )
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Label("Autosaved locally", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        store.selection = .scanner
+                    } label: {
+                        Label("Scanner Intake", systemImage: "viewfinder")
+                    }
+
+                    Divider()
+                        .frame(height: 20)
+
+                    Button(action: store.importCSV) {
+                        Label("Import", systemImage: "square.and.arrow.down")
+                    }
+                    Button(action: store.exportCSV) {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        _ = store.pasteRowsFromClipboard()
+                    } label: {
+                        Label("Paste Rows", systemImage: "doc.on.clipboard")
+                    }
+
+                    Divider()
+                        .frame(height: 20)
+
+                    Button(action: store.undo) {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(!store.canUndo)
+                    Button(action: store.redo) {
+                        Label("Redo", systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(!store.canRedo)
+
+                    Menu {
+                        Button("Add Column…") { showingAddColumn = true }
+                        Divider()
+                        Text("Click any column header to edit it")
+                    } label: {
+                        Label("Columns", systemImage: "rectangle.split.3x1")
+                    }
+
+                    Button(action: store.addRow) {
+                        Label("Add Row", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var gettingStartedBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "viewfinder.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ready for your first scouting entry")
+                    .font(.subheadline.weight(.semibold))
+                Text("Scan a QRScout barcode, paste rows, or type directly into the blank row below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if store.document.columns.allSatisfy({ $0.role != .teamNumber }) {
-                Label("Map a Team Number column to enable rankings", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
+            Button("Open Scanner") { store.selection = .scanner }
+                .buttonStyle(.borderedProminent)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .background(Color.accentColor.opacity(0.08))
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var meaningfulRowCount: Int {
+        store.document.rows.filter { row in
+            store.document.columns.contains { column in
+                !(row.values[column.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        }.count
+    }
+
+    private func summaryPill(
+        _ title: String,
+        systemImage: String,
+        color: Color = .secondary
+    ) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.09), in: Capsule())
     }
 
     private var grid: some View {
         let issueRows = Set(store.qualitySummary.issues.map(\.rowID))
-        return ScrollView([.horizontal, .vertical]) {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    ForEach(Array(store.document.rows.enumerated()), id: \.element.id) { index, row in
-                        HStack(spacing: 0) {
-                            let hasIssue = issueRows.contains(row.id)
-                            HStack(spacing: 3) {
-                                Text("\(index + 1)")
-                                if hasIssue { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange) }
-                            }
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 46, height: 32)
-                            .background(hasIssue ? Color.orange.opacity(0.12) : Color(nsColor: .controlBackgroundColor))
-
-                            ForEach(store.document.columns) { column in
-                                SpreadsheetCell(row: row, column: column)
-                                    .frame(width: columnWidth(column), height: 32)
-                            }
-                        }
-                        .contextMenu {
-                            Button("Duplicate Row") { store.duplicateRow(row.id) }
-                            Divider()
-                            Button("Delete Row", role: .destructive) { store.deleteRow(row.id) }
-                        }
-                    }
-                } header: {
-                    HStack(spacing: 0) {
-                        Text("#")
-                            .font(.caption.bold())
-                            .frame(width: 46, height: 36)
-                            .background(.regularMaterial)
-                        ForEach(store.document.columns) { column in
-                            Button {
-                                editingColumn = column
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Text(column.name)
-                                        .lineLimit(1)
-                                    if column.role != .none {
-                                        Image(systemName: "function")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tint)
+        return GeometryReader { viewport in
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        ForEach(Array(store.document.rows.enumerated()), id: \.element.id) { index, row in
+                            HStack(spacing: 0) {
+                                let hasIssue = issueRows.contains(row.id)
+                                HStack(spacing: 3) {
+                                    Text("\(index + 1)")
+                                    if hasIssue {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .foregroundStyle(.orange)
                                     }
                                 }
-                                .font(.caption.bold())
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .contentShape(Rectangle())
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: 50, height: 38)
+                                .background(hasIssue ? Color.orange.opacity(0.12) : rowBackground(index))
+
+                                ForEach(store.document.columns) { column in
+                                    SpreadsheetCell(row: row, column: column)
+                                        .frame(width: columnWidth(column), height: 38)
+                                        .background(rowBackground(index))
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .frame(width: columnWidth(column), height: 36)
-                            .background(.regularMaterial)
-                            .overlay(alignment: .trailing) { Divider() }
                             .contextMenu {
-                                Button("Column Settings…") { editingColumn = column }
+                                Button("Duplicate Row") { store.duplicateRow(row.id) }
                                 Divider()
-                                Button("Delete Column", role: .destructive) { store.deleteColumn(column.id) }
+                                Button("Delete Row", role: .destructive) { store.deleteRow(row.id) }
                             }
                         }
+                    } header: {
+                        HStack(spacing: 0) {
+                            Text("#")
+                                .font(.caption.bold())
+                                .frame(width: 50, height: 44)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                            ForEach(store.document.columns) { column in
+                                Button {
+                                    editingColumn = column
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Text(column.name)
+                                            .lineLimit(1)
+                                        if column.role != .none {
+                                            Image(systemName: "function")
+                                                .font(.caption2)
+                                                .foregroundStyle(.tint)
+                                        }
+                                    }
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.horizontal, 4)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .frame(width: columnWidth(column), height: 44)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .overlay(alignment: .trailing) { Divider() }
+                                .contextMenu {
+                                    Button("Column Settings…") { editingColumn = column }
+                                    Divider()
+                                    Button("Delete Column", role: .destructive) { store.deleteColumn(column.id) }
+                                }
+                            }
+                        }
+                        .overlay(alignment: .bottom) { Divider() }
+                        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
                     }
-                    .overlay(alignment: .bottom) { Divider() }
                 }
+                .frame(
+                    minWidth: max(totalGridWidth, viewport.size.width),
+                    minHeight: viewport.size.height,
+                    alignment: .topLeading
+                )
             }
+            .background(Color(nsColor: .textBackgroundColor))
         }
-        .background(Color(nsColor: .textBackgroundColor))
     }
 
     private func columnWidth(_ column: SheetColumn) -> CGFloat {
-        if column.name.localizedCaseInsensitiveContains("note") { return 240 }
-        if column.type == .boolean { return 110 }
-        return 132
+        let name = column.name.lowercased()
+        if name.contains("comment") || name.contains("note") { return 260 }
+        if column.role == .teamNumber || column.role == .matchNumber { return 116 }
+        if column.type == .boolean { return 112 }
+        if name.count > 20 { return 176 }
+        return 144
+    }
+
+    private var totalGridWidth: CGFloat {
+        50 + store.document.columns.reduce(0) { $0 + columnWidth($1) }
+    }
+
+    private func rowBackground(_ index: Int) -> Color {
+        index.isMultiple(of: 2)
+            ? Color(nsColor: .textBackgroundColor)
+            : Color(nsColor: .controlBackgroundColor).opacity(0.55)
     }
 }
 
@@ -184,10 +293,10 @@ private struct SpreadsheetCell: View {
                 .toggleStyle(.checkbox)
                 .frame(maxWidth: .infinity, alignment: .center)
             } else {
-                TextField("", text: value)
+                TextField(column.role == .teamNumber ? "Team" : "", text: value)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 7)
-                    .font(column.type == .text ? .body : .body.monospacedDigit())
+                    .padding(.horizontal, 9)
+                    .font(column.type == .text ? .callout : .callout.monospacedDigit())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

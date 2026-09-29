@@ -121,7 +121,7 @@ For a release, update `CFBundleShortVersionString` in `Resources/Info.plist` and
 ## Import existing scouting data
 
 1. Export the field-scouting app's data as UTF-8 CSV.
-2. In FieldScout, choose **Import CSV**.
+2. In the Scouting Sheet toolbar, choose **Import**.
 3. Click a column header to check its **Analytics role**.
 4. Map the team, match, scoring, defense, and breakdown columns as needed.
 

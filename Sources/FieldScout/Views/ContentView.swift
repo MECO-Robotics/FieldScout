@@ -12,7 +12,7 @@ struct ContentView: View {
             .navigationTitle("FieldScout")
             .navigationSplitViewColumnWidth(min: 180, ideal: 210)
         } detail: {
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 Group {
                     switch store.selection {
                     case .sheet: SpreadsheetView()
@@ -26,8 +26,10 @@ struct ContentView: View {
 
                 Divider()
                 RankingsSidebar()
-                    .frame(width: 260)
+                    .frame(width: 290)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
+            .background(Color(nsColor: .windowBackgroundColor))
         }
         .alert("FieldScout", isPresented: Binding(
             get: { store.errorMessage != nil },
