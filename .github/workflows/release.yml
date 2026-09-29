@@ -107,7 +107,7 @@ jobs:
           path: |
             Windows/dist/*.exe
             Windows/dist/*.zip
-            Windows/dist/*.yml
+            Windows/dist/latest.yml
             Windows/dist/*.blockmap
           if-no-files-found: error
 
@@ -132,5 +132,7 @@ jobs:
           if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --title "FieldScout ${version}" --generate-notes
           fi
-          gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          mapfile -d '' assets < <(find release-assets -type f \( -name 'FieldScout-*' -o -name 'latest.yml' -o -name 'appcast.xml' \) -print0)
+          test "${#assets[@]}" -eq 6
+          gh release upload "$tag" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
