@@ -212,8 +212,17 @@
     return String(raw ?? "").replace(/^[ \r\n]+|[ \r\n]+$/g, "");
   }
 
+  function normalizeScannerPayload(raw) {
+    let payload = trimScannerEnvelope(raw);
+    if (!payload || payload.trimStart().startsWith("{")) return payload;
+    return payload
+      .replace(/\\t/g, "\t")
+      .replace(/<tab>/gi, "\t")
+      .replace(/[⇥\v\u001d\u001e\u001f]/g, "\t");
+  }
+
   function parseScan(raw) {
-    const preserved = trimScannerEnvelope(raw);
+    const preserved = normalizeScannerPayload(raw);
     if (!preserved) throw new Error("Scan a barcode before adding it.");
 
     if (preserved.trimStart().startsWith("{")) {
@@ -243,13 +252,24 @@
     throw new Error("This barcode is not JSON, key=value, CSV, or tab-separated data.");
   }
 
+  function isPackedScan(raw) {
+    try {
+      const parsed = parseScan(raw);
+      if (parsed.kind === "qrScout") return true;
+      if (parsed.kind === "positional") return parsed.fields.length >= 8;
+      return parsed.entries.length >= 2;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function meaningfulRows(document) {
     return document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
   }
 
   function ingestScan(inputDocument, raw, conflictResolution = "ask") {
     let document = normalizeDocument(inputDocument);
-    const exactRaw = trimScannerEnvelope(raw);
+    const exactRaw = normalizeScannerPayload(raw);
     if (document.ingestedScanPayloads.includes(exactRaw)) {
       return { accepted: false, document, message: "Duplicate scan ignored." };
     }
@@ -342,6 +362,24 @@
             ? "QRScout scan accepted — all 29 fields added and rankings refreshed."
             : "Scan accepted and rankings refreshed."
     };
+  }
+
+  function ingestScanFromCell(inputDocument, rowId, columnId) {
+    let document = normalizeDocument(inputDocument);
+    const source = document.rows.find((row) => row.id === rowId);
+    if (!source) return { handled: false, document };
+    const raw = source.values[columnId] || "";
+    if (!isPackedScan(raw)) return { handled: false, document };
+
+    const hasOtherValues = Object.entries(source.values).some(([key, value]) => (
+      key !== columnId && String(value).trim()
+    ));
+    if (hasOtherValues) return { handled: false, document };
+
+    document.rows = document.rows.filter((row) => row.id !== rowId);
+    const result = ingestScan(document, raw);
+    if (!result.document.rows.length) result.document.rows.push(blankRow(result.document.columns));
+    return { ...result, handled: true };
   }
 
   function dataQuality(inputDocument) {
@@ -567,7 +605,9 @@
     exportCSV,
     importCSV,
     parseScan,
+    isPackedScan,
     ingestScan,
+    ingestScanFromCell,
     dataQuality,
     analyze,
     answer,

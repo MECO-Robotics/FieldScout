@@ -114,9 +114,9 @@ final class SpreadsheetStore: ObservableObject {
     }
 
     @discardableResult
-    func ingestScan(_ rawPayload: String) throws -> ScanIngestResult {
+    func ingestScan(_ rawPayload: String, recordHistory: Bool = true) throws -> ScanIngestResult {
         // Remove the scanner's Return terminator without discarding meaningful empty tab fields.
-        let raw = rawPayload.trimmingCharacters(in: CharacterSet(charactersIn: " \r\n"))
+        let raw = ScanPayloadService.normalizedPayload(rawPayload)
         let parsed = try ScanPayloadService.parse(raw)
         let rawColumnName = "Raw Scan Payload"
 
@@ -220,10 +220,39 @@ final class SpreadsheetStore: ObservableObject {
             return .conflict(conflict)
         }
 
-        recordUndo()
+        if recordHistory { recordUndo() }
         appendScannedRow(values: values, rawPayload: raw)
         if successMessage.hasPrefix("QRScout") { return .accepted(successMessage) }
         return .accepted("Scan accepted — row \(document.rows.count) added and rankings refreshed.")
+    }
+
+    /// Converts a barcode that was scanned or pasted into a blank spreadsheet row.
+    /// Normal single-cell edits are ignored; only multi-field payloads are handled.
+    @discardableResult
+    func ingestPackedCell(rowID: UUID, columnID: UUID) throws -> ScanIngestResult? {
+        guard let sourceIndex = document.rows.firstIndex(where: { $0.id == rowID }) else { return nil }
+        let sourceRow = document.rows[sourceIndex]
+        let rawPayload = sourceRow.values[columnID] ?? ""
+        guard ScanPayloadService.isPackedRow(rawPayload) else { return nil }
+
+        let hasOtherValues = sourceRow.values.contains { key, value in
+            key != columnID && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !hasOtherValues else { return nil }
+
+        // The first keystroke already saved the pre-scan row to the undo stack. Remove
+        // the temporary one-cell value before routing the payload through normal intake.
+        document.rows.remove(at: sourceIndex)
+        if document.rows.isEmpty { document.rows.append(ScoutingRow()) }
+
+        let result = try ingestScan(rawPayload, recordHistory: false)
+        switch result {
+        case .accepted:
+            break // ingestScan already persisted the completed row.
+        case .duplicate, .conflict:
+            touchAndSave()
+        }
+        return result
     }
 
     @discardableResult

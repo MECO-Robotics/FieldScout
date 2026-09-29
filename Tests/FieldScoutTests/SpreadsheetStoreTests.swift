@@ -3,6 +3,25 @@ import XCTest
 
 @MainActor
 final class SpreadsheetStoreTests: XCTestCase {
+    func testBarcodeScannedIntoOneCellIsDistributedAcrossTheRow() throws {
+        let storage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let store = SpreadsheetStore(storageDirectory: storage)
+        let row = try XCTUnwrap(store.document.rows.first)
+        let firstColumn = try XCTUnwrap(store.document.columns.first)
+        let values = (0..<QRScoutSchema.fieldCount).map(String.init)
+
+        store.updateValue(values.joined(separator: "<TAB>"), rowID: row.id, columnID: firstColumn.id)
+        let result = try XCTUnwrap(store.ingestPackedCell(rowID: row.id, columnID: firstColumn.id))
+
+        guard case .accepted = result else { return XCTFail("Packed cell scan should be accepted") }
+        XCTAssertEqual(store.document.rows.count, 1)
+        XCTAssertEqual(store.document.rows[0].values[store.document.columns[1].id], "1")
+        XCTAssertEqual(store.document.rows[0].values[store.document.columns[2].id], "2")
+        XCTAssertFalse(store.document.rows[0].values.values.contains(values.joined(separator: "<TAB>")))
+    }
+
     func testConflictingScanCanReplaceExistingRow() throws {
         let store = makeStore()
         var first = Array(repeating: "", count: 29)

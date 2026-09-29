@@ -5,7 +5,7 @@ struct ScannerIntakeView: View {
     @EnvironmentObject private var store: SpreadsheetStore
     @FocusState private var scannerFocused: Bool
     @State private var payload = ""
-    @State private var status = "Ready for the first scan"
+    @State private var status = "Ready for the first scan — Return is optional"
     @State private var statusIsError = false
     @State private var acceptedScans = 0
 
@@ -15,7 +15,7 @@ struct ScannerIntakeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Scanner Intake", systemImage: "barcode.viewfinder")
                         .font(.largeTitle.bold())
-                    Text("For USB or Bluetooth scanners that act like a keyboard and send Return after each barcode.")
+                    Text("For USB or Bluetooth keyboard scanners. Each barcode is split into spreadsheet columns automatically.")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -84,6 +84,17 @@ struct ScannerIntakeView: View {
         .navigationTitle("Scanner Intake")
         .onAppear { scannerFocused = true }
         .onTapGesture { scannerFocused = true }
+        .task(id: payload) {
+            let candidate = payload
+            guard ScanPayloadService.isPackedRow(candidate) else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+            guard payload == candidate else { return }
+            submitScan()
+        }
         .sheet(item: $store.pendingScanConflict) { conflict in
             ScanConflictView(
                 conflict: conflict,
@@ -129,7 +140,7 @@ struct ScannerIntakeView: View {
     }
 }
 
-private struct ScanConflictView: View {
+struct ScanConflictView: View {
     let conflict: ScanConflict
     let onResolve: (ScanConflictResolution) -> Void
     let onCancel: () -> Void

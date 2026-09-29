@@ -37,6 +37,13 @@ struct SpreadsheetView: View {
                 store.updateColumn(updated)
             }
         }
+        .sheet(item: $store.pendingScanConflict) { conflict in
+            ScanConflictView(
+                conflict: conflict,
+                onResolve: { resolution in _ = store.resolveScanConflict(resolution) },
+                onCancel: store.cancelScanConflict
+            )
+        }
     }
 
     private var sheetHeader: some View {
@@ -297,11 +304,31 @@ private struct SpreadsheetCell: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 9)
                     .font(column.type == .text ? .callout : .callout.monospacedDigit())
+                    .onSubmit(handlePackedScan)
+                    .task(id: value.wrappedValue) {
+                        let candidate = value.wrappedValue
+                        guard ScanPayloadService.isPackedRow(candidate) else { return }
+                        do {
+                            try await Task.sleep(for: .milliseconds(350))
+                        } catch {
+                            return
+                        }
+                        guard value.wrappedValue == candidate else { return }
+                        handlePackedScan()
+                    }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .trailing) { Divider() }
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private func handlePackedScan() {
+        do {
+            _ = try store.ingestPackedCell(rowID: row.id, columnID: column.id)
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
     }
 }
 

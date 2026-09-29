@@ -27,6 +27,24 @@ final class ScanPayloadServiceTests: XCTestCase {
         XCTAssertEqual(result, .positional(["Alex", "12", "254", "Fast, reliable"]))
     }
 
+    func testNormalizesPrintableScannerTabAliases() throws {
+        let values = (0..<QRScoutSchema.fieldCount).map(String.init)
+
+        XCTAssertEqual(
+            try ScanPayloadService.parse(values.joined(separator: "<TAB>")),
+            .qrScoutLegacy(values)
+        )
+        XCTAssertEqual(
+            try ScanPayloadService.parse(values.joined(separator: "\\t")),
+            .qrScoutLegacy(values)
+        )
+    }
+
+    func testOnlyMultiFieldRowsAreRecognizedAsPackedScans() {
+        XCTAssertFalse(ScanPayloadService.isPackedRow("Fast, stable"))
+        XCTAssertTrue(ScanPayloadService.isPackedRow((0..<29).map(String.init).joined(separator: "\t")))
+    }
+
     func testRejectsUnknownPackedPayloadInsteadOfDroppingIt() {
         XCTAssertThrowsError(try ScanPayloadService.parse("UNKNOWNPACKEDVALUE")) { error in
             XCTAssertEqual(error as? ScanPayloadError, .unsupported)

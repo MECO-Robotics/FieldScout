@@ -19,6 +19,7 @@
     pendingConflict: null,
     backups: []
   };
+  let scannerIdleTimer = null;
 
   const byId = (id) => document.getElementById(id);
 
@@ -215,6 +216,11 @@
             scheduleSave();
             refreshAnalytics();
             updateCounts();
+          });
+          input.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" || !core.isPackedScan(input.value)) return;
+            event.preventDefault();
+            acceptScanFromCell(row.id, column.id);
           });
         }
         td.append(input);
@@ -648,6 +654,25 @@
     updateCounts();
   }
 
+  function acceptScanFromCell(rowId, columnId) {
+    try {
+      const result = core.ingestScanFromCell(state.document, rowId, columnId);
+      if (!result.handled) return;
+      state.document = result.document;
+      if (result.conflict) {
+        renderAll();
+        showConflict(result.conflict);
+      } else {
+        if (result.accepted) state.acceptedScans += 1;
+        scheduleSave();
+        renderAll();
+        showSaveStatus(result.message);
+      }
+    } catch (error) {
+      showSaveStatus(`Could not split scan: ${error.message}`, true);
+    }
+  }
+
   function bindEvents() {
     document.querySelectorAll(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
     byId("add-row-button").addEventListener("click", () => { switchView("sheet"); addRow(); });
@@ -680,10 +705,19 @@
         const input = event.currentTarget;
         const start = input.selectionStart;
         input.setRangeText("\t", start, input.selectionEnd, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
       } else if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         acceptScan();
       }
+    });
+    byId("scanner-input").addEventListener("input", (event) => {
+      window.clearTimeout(scannerIdleTimer);
+      const candidate = event.currentTarget.value;
+      if (!core.isPackedScan(candidate)) return;
+      scannerIdleTimer = window.setTimeout(() => {
+        if (byId("scanner-input").value === candidate) acceptScan();
+      }, 350);
     });
     byId("analyst-form").addEventListener("submit", (event) => {
       event.preventDefault();

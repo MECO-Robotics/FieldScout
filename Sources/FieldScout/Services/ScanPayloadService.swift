@@ -34,9 +34,39 @@ enum ParsedScan: Equatable {
 }
 
 enum ScanPayloadService {
+    static func normalizedPayload(_ rawPayload: String) -> String {
+        var payload = rawPayload.trimmingCharacters(in: CharacterSet(charactersIn: " \r\n"))
+        guard !payload.isEmpty, payload.first != "{" else { return payload }
+
+        // Some keyboard-wedge scanners send a printable stand-in for Tab instead of
+        // the control character contained in the QR code. Treat the common variants
+        // as field separators so the entire scan cannot get stranded in one cell.
+        let separatorAliases = ["\\t", "<TAB>", "⇥", "\u{000B}", "\u{001D}", "\u{001E}", "\u{001F}"]
+        for alias in separatorAliases {
+            payload = payload.replacingOccurrences(
+                of: alias,
+                with: "\t",
+                options: alias == "<TAB>" ? [.caseInsensitive] : []
+            )
+        }
+        return payload
+    }
+
+    static func isPackedRow(_ rawPayload: String) -> Bool {
+        guard let parsed = try? parse(rawPayload) else { return false }
+        switch parsed {
+        case .qrScoutLegacy:
+            return true
+        case .positional(let fields):
+            return fields.count >= 8
+        case .named(let fields):
+            return fields.count >= 2
+        }
+    }
+
     static func parse(_ rawPayload: String) throws -> ParsedScan {
         // Preserve leading and trailing tabs because empty first/last QRScout fields are significant.
-        let payload = rawPayload.trimmingCharacters(in: CharacterSet(charactersIn: " \r\n"))
+        let payload = normalizedPayload(rawPayload)
         guard !payload.isEmpty else { throw ScanPayloadError.empty }
 
         if payload.first == "{",

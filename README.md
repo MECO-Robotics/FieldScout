@@ -46,11 +46,11 @@ Version 0.5.0 is the first updater-enabled release. Anyone running 0.4.0 or earl
 ## Use an iPad app and barcode scanner
 
 1. Open **Scanner Intake** in FieldScout.
-2. Pair or plug in a barcode scanner configured as a keyboard and set it to send Return after every scan.
+2. Pair or plug in a barcode scanner configured as a keyboard. Sending Return after a scan is optional.
 3. Show the scouting barcode on the iPad and scan it.
 4. FieldScout appends the 29 QRScout values as one row, archives the original barcode outside the visible grid, and refreshes rankings immediately.
 
-The scanner field automatically regains focus after each accepted scan and captures literal Tab keystrokes from keyboard-wedge scanners. Exact duplicate payloads are ignored. A QRScout Legacy barcode is recognized by its 29 tab-separated values and mapped to the precise source-app field order. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported.
+FieldScout imports a complete barcode automatically after the scanner pauses, splits its values into separate columns, and then returns focus for the next scan. A packed barcode accidentally scanned into a blank spreadsheet cell is also detected and distributed across that row. Literal tabs and common printable scanner aliases such as `<TAB>`, `\t`, and `⇥` are accepted. Exact duplicate payloads are ignored. A QRScout Legacy barcode is recognized by its 29 values and mapped to the precise source-app field order. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported.
 
 If a different barcode has the same team and match as an existing row, FieldScout pauses and shows the changed values side by side. Choose **Replace Existing**, **Keep Both**, or cancel without changing the sheet.
 

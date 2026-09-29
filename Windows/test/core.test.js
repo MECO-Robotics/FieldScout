@@ -48,6 +48,29 @@ test("scanner preserves empty first and last QRScout fields", () => {
   assert.equal(result.document.rows[0].values["qr-28"], "");
 });
 
+test("scanner normalizes printable tab aliases", () => {
+  const fields = Array.from({ length: 29 }, (_value, index) => String(index));
+  const result = core.ingestScan(core.createDocument(), fields.join("<TAB>"));
+  assert.equal(result.accepted, true);
+  assert.equal(result.document.rows[0].values["qr-1"], "1");
+  assert.equal(result.document.rows[0].values["qr-28"], "28");
+});
+
+test("barcode scanned into one sheet cell is distributed across the row", () => {
+  const document = core.createDocument();
+  const sourceRow = document.rows[0];
+  sourceRow.values["qr-0"] = Array.from({ length: 29 }, (_value, index) => String(index)).join("\\t");
+
+  const result = core.ingestScanFromCell(document, sourceRow.id, "qr-0");
+
+  assert.equal(result.handled, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.document.rows.length, 1);
+  assert.equal(result.document.rows[0].values["qr-1"], "1");
+  assert.equal(result.document.rows[0].values["qr-2"], "2");
+  assert.equal(result.document.rows[0].values["qr-0"], "0");
+});
+
 test("duplicate scans are ignored without adding another row", () => {
   const payload = Array.from({ length: 29 }, (_value, index) => String(index)).join("\t");
   const first = core.ingestScan(core.createDocument(), payload);
