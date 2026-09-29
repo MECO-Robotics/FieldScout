@@ -1,0 +1,61 @@
+name: Build Windows app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Windows
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Windows/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Windows data engine
+        run: npm test
+
+      - name: Package Windows installer and portable archive
+        run: npm run build:win
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FieldScout-Windows
+          path: |
+            Windows/dist/*.exe
+            Windows/dist/*.zip
+          if-no-files-found: error
+
+      - name: Publish tagged release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $assets = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object { $_.FullName }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag @assets --title "FieldScout $($tag.TrimStart('v'))" --generate-notes
+          } else {
+            gh release upload $tag @assets --clobber
+          }

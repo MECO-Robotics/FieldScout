@@ -10,3 +10,7 @@ outputs/*.zip
 
 *.xcuserstate
 xcuserdata/
+
+# Windows/Electron build output.
+Windows/node_modules/
+Windows/dist/

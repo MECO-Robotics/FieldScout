@@ -1,0 +1,50 @@
+{
+  "name": "fieldscout-windows",
+  "version": "0.3.0",
+  "description": "Offline Windows spreadsheet and analytics app for FRC scouting",
+  "main": "main.js",
+  "author": "MECO Robotics Team 8324",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "build:win": "electron-builder --win nsis zip --x64"
+  },
+  "devDependencies": {
+    "electron": "^38.1.2",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "org.mecorobotics.fieldscout",
+    "productName": "FieldScout",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "icon": "assets/AppIcon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "FieldScout-${version}-Windows-Setup.${ext}"
+    },
+    "artifactName": "FieldScout-${version}-Windows-${arch}.${ext}"
+  }
+}

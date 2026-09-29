@@ -1,6 +1,6 @@
 # FieldScout
 
-FieldScout is a fully offline, native macOS spreadsheet for FRC field-scouting data. Raw scouting entries stay in the sheet while team summaries, charts, and rankings are calculated as separate views.
+FieldScout is a fully offline desktop spreadsheet for FRC field-scouting data on macOS and Windows. Raw scouting entries stay in the sheet while team summaries, charts, and rankings are calculated as separate views.
 
 The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identity, combining a scouting grid with a rising performance trajectory.
 
@@ -24,7 +24,10 @@ No account, server, API key, or internet connection is used.
 
 ## Download
 
-Download the current packaged macOS build from [GitHub Releases](https://github.com/MECO-Robotics/FieldScout/releases/latest). FieldScout requires macOS 14 or newer. The build is ad-hoc signed but not Apple-notarized, so macOS may require opening it with Control-click → **Open** the first time.
+Download the current packaged macOS and Windows builds from [GitHub Releases](https://github.com/MECO-Robotics/FieldScout/releases/latest).
+
+- **Windows:** use the `.exe` installer or extract the portable Windows `.zip`. The Windows build is currently unsigned, so Microsoft Defender SmartScreen may show an unknown-publisher warning.
+- **macOS:** requires macOS 14 or newer. The build is ad-hoc signed but not Apple-notarized, so macOS may require opening it with Control-click → **Open** the first time.
 
 ## Use an iPad app and barcode scanner
 
@@ -49,7 +52,7 @@ Scored How?, Scoring Location, Feeding/Passing Skill, Passed How?,
 Defense Skill, Yello/Red Card, First Pick, Second Pick, Comments
 ```
 
-## Run it
+## Run it on macOS
 
 Open `Package.swift` in Xcode and run the `FieldScout` scheme, or run:
 
@@ -65,6 +68,24 @@ open outputs/FieldScout.app
 ```
 
 The generated app is ad-hoc signed for local use. It is not notarized for public distribution. The packaged build includes the MECO app icon in its bundle and also applies it directly to the running app so the Dock uses the correct artwork.
+
+## Run it on Windows
+
+The Windows app lives in `Windows/` and uses Electron for the desktop shell. Install Node.js 24 or newer, then run:
+
+```powershell
+cd Windows
+npm ci
+npm start
+```
+
+To build the Windows installer and portable archive from Windows:
+
+```powershell
+npm run build:win
+```
+
+GitHub Actions runs the same tests and packaging command on a Windows runner whenever a version tag is pushed. Windows scouting data is stored locally in `%APPDATA%\FieldScout\scouting-data.json`; no account, API key, or internet connection is needed while using the app.
 
 ## Import existing scouting data
 
@@ -92,4 +113,9 @@ This projected EPA is a scouting-data estimate, not the official Statbotics EPA 
 swift test
 ```
 
-Tests cover the exact 29-field QRScout contract, tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, and header-role inference.
+```powershell
+cd Windows
+npm test
+```
+
+The macOS and Windows test suites cover the exact 29-field QRScout contract, tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, duplicate scans, and offline analyst responses.
