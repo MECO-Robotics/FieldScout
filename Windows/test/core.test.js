@@ -87,3 +87,47 @@ test("offline analyst compares teams without network access", () => {
   assert.match(answer, /Team 8324 leads projected EPA/);
   assert.match(answer, /Team 1234 has the higher defense rating/);
 });
+
+test("same team and match produces a reviewable conflict", () => {
+  const firstFields = Array(29).fill("");
+  firstFields[0] = "AJ";
+  firstFields[1] = "7";
+  firstFields[2] = "8324";
+  firstFields[24] = "3";
+  const secondFields = [...firstFields];
+  secondFields[24] = "5";
+
+  const first = core.ingestScan(core.createDocument(), firstFields.join("\t"));
+  const conflict = core.ingestScan(first.document, secondFields.join("\t"));
+  assert.equal(conflict.accepted, false);
+  assert.equal(conflict.conflict.teamNumber, 8324);
+  assert.equal(conflict.conflict.matchNumber, 7);
+  assert.deepEqual(conflict.conflict.differences.find((difference) => difference.columnName === "Defense Skill"), {
+    columnName: "Defense Skill",
+    previousValue: "3",
+    scannedValue: "5"
+  });
+  assert.equal(conflict.document.rows.length, 1);
+
+  const replaced = core.ingestScan(first.document, secondFields.join("\t"), "replace");
+  assert.equal(replaced.accepted, true);
+  assert.equal(replaced.document.rows.length, 1);
+  assert.equal(replaced.document.rows[0].values["qr-24"], "5");
+});
+
+test("data quality reports duplicates, invalid ratings, and six-team match coverage", () => {
+  const a = Array(29).fill("");
+  a[0] = "AJ";
+  a[1] = "9";
+  a[2] = "8324";
+  a[24] = "7";
+  const b = [...a];
+  b[0] = "MK";
+  const summary = core.dataQuality(populatedQRScoutDocument([a, b]));
+  assert.equal(summary.entryCount, 2);
+  assert.equal(summary.rowsNeedingAttention, 2);
+  assert.equal(summary.matches[0].teamNumbers.length, 1);
+  assert.equal(summary.matches[0].missingScoutCount, 5);
+  assert.ok(summary.issues.some((issue) => issue.message.includes("between 0 and 5")));
+  assert.ok(summary.issues.some((issue) => issue.message.includes("2 entries")));
+});

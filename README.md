@@ -11,11 +11,15 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 - Scanner Intake screen for iPad-generated barcodes and keyboard-wedge scanners
 - JSON, `key=value`, CSV-row, and tab-separated scan payloads
 - Exact raw scan preservation in the local document archive and duplicate-scan protection
+- Team-and-match conflict review with side-by-side values and replace/keep-both choices
 - Exact compatibility with QRScout Legacy's 29-field tab-separated barcode contract
 - Preservation of unrecognized CSV columns
 - Configurable analytics roles for any column
 - Automatic grouping by team number without modifying source rows
 - Rankings for projected EPA, breakdown rate, offense, and defense
+- Event Status coverage for six robots per match plus missing/invalid data checks
+- Undo/redo, bulk tab-separated row paste, and automatic recoverable snapshots
+- Lightweight Favorite, Watch, and Do Not Pick flags with one short team note
 - Team match-trend and scoring-composition charts
 - Offline questions about top teams, reliability, offense, defense, and team comparisons
 - Automatic local persistence in `Application Support/FieldScout/scouting-data.json`
@@ -38,6 +42,8 @@ Download the current packaged macOS and Windows builds from [GitHub Releases](ht
 
 The scanner field automatically regains focus after each accepted scan and captures literal Tab keystrokes from keyboard-wedge scanners. Exact duplicate payloads are ignored. A QRScout Legacy barcode is recognized by its 29 tab-separated values and mapped to the precise source-app field order. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported.
 
+If a different barcode has the same team and match as an existing row, FieldScout pauses and shows the changed values side by side. Choose **Replace Existing**, **Keep Both**, or cancel without changing the sheet.
+
 ### QRScout Legacy columns
 
 The starter sheet mirrors `PayloadBuilder.m` from MECO Robotics' 2026 QRScout Legacy repository. It retains the source spreadsheet's intentional legacy spellings and duplicate phase-specific headers:
@@ -51,6 +57,19 @@ Mechanical Issue, Died, Triped/Fell Over, Scoring Efectiveness,
 Scored How?, Scoring Location, Feeding/Passing Skill, Passed How?,
 Defense Skill, Yello/Red Card, First Pick, Second Pick, Comments
 ```
+
+## Event-day reliability
+
+The **Event Status** screen intentionally keeps operational checks in one place:
+
+- Data quality identifies missing or invalid team/match numbers, missing scouter initials, duplicate team-match entries, and ratings outside 0–5.
+- Match coverage shows how many of the expected six robots have been scouted for each match. Team coverage shows teams with the fewest collected entries first.
+- FieldScout automatically creates timestamped snapshots while data changes and before destructive actions. The 20 newest snapshots are retained and can be restored from Event Status; the current sheet is backed up before a restore.
+- Undo and redo are available from the spreadsheet toolbar and with Command-Z/Command-Shift-Z on macOS or Ctrl-Z/Ctrl-Shift-Z on Windows.
+- **Paste Rows** appends tab-separated clipboard rows in the current column order.
+- Favorite, Watch, and Do Not Pick are human scouting flags. They include a short note and never change calculated rankings.
+
+Backups remain local alongside the main data file in `~/Library/Application Support/FieldScout/Backups` on macOS and `%APPDATA%\FieldScout\Backups` on Windows.
 
 ## Run it on macOS
 
@@ -118,4 +137,4 @@ cd Windows
 npm test
 ```
 
-The macOS and Windows test suites cover the exact 29-field QRScout contract, tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, duplicate scans, and offline analyst responses.
+The macOS and Windows test suites cover the exact 29-field QRScout contract, tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.

@@ -67,6 +67,7 @@
       columns,
       rows: [blankRow(columns)],
       ingestedScanPayloads: [],
+      teamAnnotations: [],
       updatedAt: new Date().toISOString()
     };
   }
@@ -82,6 +83,9 @@
     document.title = document.title || "FieldScout";
     document.ingestedScanPayloads = Array.isArray(document.ingestedScanPayloads)
       ? document.ingestedScanPayloads
+      : [];
+    document.teamAnnotations = Array.isArray(document.teamAnnotations)
+      ? document.teamAnnotations
       : [];
     document.columns = document.columns.map((column, index) => ({
       id: column.id || id(`column-${index}`),
@@ -199,6 +203,7 @@
       columns,
       rows,
       ingestedScanPayloads: [],
+      teamAnnotations: [],
       updatedAt: new Date().toISOString()
     };
   }
@@ -242,7 +247,7 @@
     return document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
   }
 
-  function ingestScan(inputDocument, raw) {
+  function ingestScan(inputDocument, raw, conflictResolution = "ask") {
     let document = normalizeDocument(inputDocument);
     const exactRaw = trimScannerEnvelope(raw);
     if (document.ingestedScanPayloads.includes(exactRaw)) {
@@ -288,16 +293,124 @@
       values = Object.fromEntries(document.columns.slice(0, parsed.fields.length).map((column, index) => [column.id, parsed.fields[index] || ""]));
     }
 
-    document.rows = document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
-    document.rows.push({ id: id("row"), values });
+    const teamColumn = document.columns.find((column) => column.role === "teamNumber");
+    const matchColumn = document.columns.find((column) => column.role === "matchNumber");
+    const team = teamColumn ? Number.parseInt(String(values[teamColumn.id] ?? "").trim(), 10) : 0;
+    const match = matchColumn ? Number.parseInt(String(values[matchColumn.id] ?? "").trim(), 10) : 0;
+    const existing = team > 0 && match > 0
+      ? document.rows.find((row) => Number.parseInt(row.values[teamColumn.id] || "0", 10) === team && Number.parseInt(row.values[matchColumn.id] || "0", 10) === match)
+      : null;
+
+    if (existing) {
+      const differences = document.columns.flatMap((column) => {
+        const previousValue = existing.values[column.id] || "";
+        const scannedValue = values[column.id] || "";
+        return previousValue === scannedValue ? [] : [{ columnName: column.name, previousValue, scannedValue }];
+      });
+      if (!differences.length) {
+        return { accepted: false, document, message: `Duplicate ignored — team ${team}, match ${match} already has the same values.` };
+      }
+      if (conflictResolution === "ask") {
+        return {
+          accepted: false,
+          document,
+          message: `Conflict found for team ${team}, match ${match}.`,
+          conflict: { existingRowId: existing.id, teamNumber: team, matchNumber: match, differences, rawPayload: exactRaw }
+        };
+      }
+      if (conflictResolution === "replace") {
+        existing.values = values;
+      } else if (conflictResolution === "keep") {
+        document.rows.push({ id: id("row"), values });
+      } else {
+        throw new Error("Unknown scan conflict resolution.");
+      }
+    } else {
+      document.rows = document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
+      document.rows.push({ id: id("row"), values });
+    }
     document.ingestedScanPayloads.push(exactRaw);
     document.updatedAt = new Date().toISOString();
     return {
       accepted: true,
       document,
-      message: parsed.kind === "qrScout"
-        ? "QRScout scan accepted — all 29 fields added and rankings refreshed."
-        : "Scan accepted and rankings refreshed."
+      message: existing && conflictResolution === "replace"
+        ? `Team ${team}, match ${match} was replaced with the new scan.`
+        : existing && conflictResolution === "keep"
+          ? `Both entries were kept for team ${team}, match ${match}.`
+          : parsed.kind === "qrScout"
+            ? "QRScout scan accepted — all 29 fields added and rankings refreshed."
+            : "Scan accepted and rankings refreshed."
+    };
+  }
+
+  function dataQuality(inputDocument) {
+    const document = normalizeDocument(inputDocument);
+    const teamColumn = document.columns.find((column) => column.role === "teamNumber");
+    const matchColumn = document.columns.find((column) => column.role === "matchNumber");
+    if (!teamColumn || !matchColumn) {
+      return { entryCount: 0, validEntryCount: 0, rowsNeedingAttention: 0, issues: [], matches: [], teams: [] };
+    }
+    const initialsColumn = document.columns.find((column) => column.name.toLowerCase() === "scouter initials");
+    const ratingNames = new Set(["Scoring Efectiveness", "Feeding/Passing Skill", "Defense Skill"]);
+    const ratingColumns = document.columns.filter((column) => ratingNames.has(column.name));
+    const issues = [];
+    const meaningfulRowIds = new Set();
+    const matchTeams = new Map();
+    const matchEntries = new Map();
+    const teamMatches = new Map();
+    const pairRows = new Map();
+    const addIssue = (row, rowNumber, severity, key, message) => issues.push({ id: `${row.id}-${key}`, rowId: row.id, rowNumber, severity, message });
+
+    document.rows.forEach((row, index) => {
+      if (!Object.values(row.values).some((value) => String(value).trim())) return;
+      meaningfulRowIds.add(row.id);
+      const rowNumber = index + 1;
+      const team = Number.parseInt(String(row.values[teamColumn.id] ?? "").trim(), 10);
+      const match = Number.parseInt(String(row.values[matchColumn.id] ?? "").trim(), 10);
+      if (!Number.isInteger(team) || team <= 0) addIssue(row, rowNumber, "error", "team", "Team number is missing or invalid.");
+      if (!Number.isInteger(match) || match <= 0) addIssue(row, rowNumber, "error", "match", "Match number is missing or invalid.");
+      if (initialsColumn && !String(row.values[initialsColumn.id] || "").trim()) addIssue(row, rowNumber, "warning", "scouter", "Scouter initials are missing.");
+      ratingColumns.forEach((column) => {
+        const text = String(row.values[column.id] || "").trim();
+        const rating = Number(text);
+        if (text && Number.isFinite(rating) && (rating < 0 || rating > 5)) addIssue(row, rowNumber, "warning", column.id, `${column.name} must be between 0 and 5.`);
+      });
+      if (!Number.isInteger(team) || team <= 0 || !Number.isInteger(match) || match <= 0) return;
+      if (!matchTeams.has(match)) matchTeams.set(match, new Set());
+      matchTeams.get(match).add(team);
+      matchEntries.set(match, (matchEntries.get(match) || 0) + 1);
+      if (!teamMatches.has(team)) teamMatches.set(team, []);
+      teamMatches.get(team).push(match);
+      const key = `${match}-${team}`;
+      if (!pairRows.has(key)) pairRows.set(key, []);
+      pairRows.get(key).push({ row, rowNumber });
+    });
+
+    pairRows.forEach((rows, key) => {
+      if (rows.length < 2) return;
+      const [match, team] = key.split("-").map(Number);
+      rows.forEach(({ row, rowNumber }) => addIssue(row, rowNumber, "warning", "duplicate", `Team ${team} has ${rows.length} entries for match ${match}.`));
+    });
+    const issueRowIds = new Set(issues.map((issue) => issue.rowId));
+    const matches = [...matchTeams.entries()].map(([matchNumber, teams]) => ({
+      matchNumber,
+      teamNumbers: [...teams].sort((a, b) => a - b),
+      entryCount: matchEntries.get(matchNumber),
+      missingScoutCount: Math.max(0, 6 - teams.size)
+    })).sort((a, b) => a.matchNumber - b.matchNumber);
+    const teams = [...teamMatches.entries()].map(([teamNumber, matches]) => ({
+      teamNumber,
+      entryCount: matches.length,
+      latestMatch: Math.max(...matches)
+    })).sort((a, b) => a.entryCount - b.entryCount || a.teamNumber - b.teamNumber);
+    return {
+      entryCount: meaningfulRowIds.size,
+      validEntryCount: [...meaningfulRowIds].filter((rowId) => !issueRowIds.has(rowId)).length,
+      rowsNeedingAttention: issueRowIds.size,
+      issues: issues.sort((a, b) => a.rowNumber - b.rowNumber || (a.severity === "error" ? -1 : 1)),
+      matches,
+      teams
     };
   }
 
@@ -455,6 +568,7 @@
     importCSV,
     parseScan,
     ingestScan,
+    dataQuality,
     analyze,
     answer,
     inferRole,

@@ -19,6 +19,14 @@ struct FieldScoutApp: App {
                 .frame(minWidth: 1_100, minHeight: 700)
         }
         .commands {
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { store.undo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!store.canUndo)
+                Button("Redo") { store.redo() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                    .disabled(!store.canRedo)
+            }
             CommandGroup(after: .newItem) {
                 Button("Add Scouting Row") {
                     store.addRow()

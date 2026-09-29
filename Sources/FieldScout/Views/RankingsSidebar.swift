@@ -34,6 +34,12 @@ struct RankingsSidebar: View {
                                         .font(.caption.bold())
                                         .foregroundStyle(.secondary)
                                         .frame(width: 22)
+                                    let annotation = store.annotation(for: team.teamNumber)
+                                    if annotation.flag != .none {
+                                        Image(systemName: annotation.flag.symbol)
+                                            .foregroundStyle(annotationColor(annotation.flag))
+                                            .help(annotation.note.isEmpty ? annotation.flag.rawValue : "\(annotation.flag.rawValue): \(annotation.note)")
+                                    }
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Team \(team.teamNumber)")
                                             .fontWeight(.semibold)
@@ -58,6 +64,19 @@ struct RankingsSidebar: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                ForEach(TeamFlag.allCases) { flag in
+                                    Button {
+                                        store.updateAnnotation(
+                                            teamNumber: team.teamNumber,
+                                            flag: flag,
+                                            note: store.annotation(for: team.teamNumber).note
+                                        )
+                                    } label: {
+                                        Label(flag.rawValue, systemImage: flag.symbol)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -65,5 +84,14 @@ struct RankingsSidebar: View {
         }
         .padding(16)
         .background(.background.secondary)
+    }
+
+    private func annotationColor(_ flag: TeamFlag) -> Color {
+        switch flag {
+        case .none: .secondary
+        case .favorite: .yellow
+        case .watch: .blue
+        case .doNotPick: .red
+        }
     }
 }

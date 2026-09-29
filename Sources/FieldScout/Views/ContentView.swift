@@ -17,6 +17,7 @@ struct ContentView: View {
                     switch store.selection {
                     case .sheet: SpreadsheetView()
                     case .scanner: ScannerIntakeView()
+                    case .status: EventStatusView()
                     case .teams: TeamChartsView()
                     case .analyst: OfflineAnalystView()
                     }

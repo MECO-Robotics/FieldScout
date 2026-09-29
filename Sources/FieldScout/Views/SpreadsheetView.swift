@@ -28,6 +28,19 @@ struct SpreadsheetView: View {
                 Button(action: store.exportCSV) {
                     Label("Export CSV", systemImage: "square.and.arrow.up")
                 }
+                Button {
+                    store.pasteRowsFromClipboard()
+                } label: {
+                    Label("Paste Rows", systemImage: "doc.on.clipboard")
+                }
+                Button(action: store.undo) {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(!store.canUndo)
+                Button(action: store.redo) {
+                    Label("Redo", systemImage: "arrow.uturn.forward")
+                }
+                .disabled(!store.canRedo)
                 Button { showingAddColumn = true } label: {
                     Label("Add Column", systemImage: "rectangle.split.3x1.fill")
                 }
@@ -73,16 +86,21 @@ struct SpreadsheetView: View {
     }
 
     private var grid: some View {
-        ScrollView([.horizontal, .vertical]) {
+        let issueRows = Set(store.qualitySummary.issues.map(\.rowID))
+        return ScrollView([.horizontal, .vertical]) {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 Section {
                     ForEach(Array(store.document.rows.enumerated()), id: \.element.id) { index, row in
                         HStack(spacing: 0) {
-                            Text("\(index + 1)")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 46, height: 32)
-                                .background(Color(nsColor: .controlBackgroundColor))
+                            let hasIssue = issueRows.contains(row.id)
+                            HStack(spacing: 3) {
+                                Text("\(index + 1)")
+                                if hasIssue { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange) }
+                            }
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 46, height: 32)
+                            .background(hasIssue ? Color.orange.opacity(0.12) : Color(nsColor: .controlBackgroundColor))
 
                             ForEach(store.document.columns) { column in
                                 SpreadsheetCell(row: row, column: column)

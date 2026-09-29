@@ -52,6 +52,32 @@ struct ScoutingRow: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+enum TeamFlag: String, Codable, CaseIterable, Identifiable, Sendable {
+    case none = "No flag"
+    case favorite = "Favorite"
+    case watch = "Watch"
+    case doNotPick = "Do Not Pick"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .none: "flag"
+        case .favorite: "star.fill"
+        case .watch: "eye.fill"
+        case .doNotPick: "hand.raised.fill"
+        }
+    }
+}
+
+struct TeamAnnotation: Codable, Identifiable, Hashable, Sendable {
+    var teamNumber: Int
+    var flag: TeamFlag
+    var note: String
+
+    var id: Int { teamNumber }
+}
+
 struct SheetDocument: Codable, Sendable {
     var title: String
     var columns: [SheetColumn]
@@ -59,6 +85,8 @@ struct SheetDocument: Codable, Sendable {
     var updatedAt: Date
     /// Exact accepted scanner payloads used for duplicate detection, kept out of the spreadsheet grid.
     var ingestedScanPayloads: [String]? = nil
+    /// Deliberate pick-list notes kept separate from calculated rankings and raw scouting rows.
+    var teamAnnotations: [TeamAnnotation]? = nil
 
     static func starter() -> SheetDocument {
         return SheetDocument(
@@ -66,7 +94,8 @@ struct SheetDocument: Codable, Sendable {
             columns: QRScoutSchema.columns(),
             rows: [ScoutingRow()],
             updatedAt: .now,
-            ingestedScanPayloads: []
+            ingestedScanPayloads: [],
+            teamAnnotations: []
         )
     }
 }

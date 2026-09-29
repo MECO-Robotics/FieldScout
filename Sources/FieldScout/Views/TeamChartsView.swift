@@ -36,6 +36,7 @@ struct TeamChartsView: View {
                             .frame(width: 160)
                         }
 
+                        annotationEditor(team)
                         metricCards(team)
                         performanceChart(team)
                         scoringChart(team)
@@ -51,6 +52,30 @@ struct TeamChartsView: View {
             }
         }
         .navigationTitle("Team Charts")
+    }
+
+    private func annotationEditor(_ team: TeamAnalytics) -> some View {
+        let annotation = store.annotation(for: team.teamNumber)
+        return HStack(spacing: 12) {
+            Picker("Pick-list flag", selection: Binding(
+                get: { store.annotation(for: team.teamNumber).flag },
+                set: { store.updateAnnotation(teamNumber: team.teamNumber, flag: $0, note: store.annotation(for: team.teamNumber).note) }
+            )) {
+                ForEach(TeamFlag.allCases) { flag in
+                    Label(flag.rawValue, systemImage: flag.symbol).tag(flag)
+                }
+            }
+            .frame(width: 180)
+
+            TextField("Short team note", text: Binding(
+                get: { store.annotation(for: team.teamNumber).note },
+                set: { store.updateAnnotation(teamNumber: team.teamNumber, flag: store.annotation(for: team.teamNumber).flag, note: $0) }
+            ))
+            .textFieldStyle(.roundedBorder)
+        }
+        .padding(14)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityLabel("Team \(team.teamNumber) pick-list annotation, currently \(annotation.flag.rawValue)")
     }
 
     private func metricCards(_ team: TeamAnalytics) -> some View {

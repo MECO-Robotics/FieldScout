@@ -84,20 +84,99 @@ struct ScannerIntakeView: View {
         .navigationTitle("Scanner Intake")
         .onAppear { scannerFocused = true }
         .onTapGesture { scannerFocused = true }
+        .sheet(item: $store.pendingScanConflict) { conflict in
+            ScanConflictView(
+                conflict: conflict,
+                onResolve: { resolution in
+                    status = store.resolveScanConflict(resolution)
+                    statusIsError = false
+                    acceptedScans += 1
+                    payload = ""
+                    scannerFocused = true
+                },
+                onCancel: {
+                    store.cancelScanConflict()
+                    status = "Conflicting scan cancelled; the existing row was not changed."
+                    statusIsError = false
+                    scannerFocused = true
+                }
+            )
+        }
     }
 
     private func submitScan() {
         do {
-            status = try store.ingestScan(payload)
-            statusIsError = false
-            if status.localizedCaseInsensitiveContains("scan accepted") { acceptedScans += 1 }
-            payload = ""
+            switch try store.ingestScan(payload) {
+            case .accepted(let message):
+                status = message
+                statusIsError = false
+                acceptedScans += 1
+                payload = ""
+            case .duplicate(let message):
+                status = message
+                statusIsError = false
+                payload = ""
+            case .conflict(let conflict):
+                status = "Conflict found for team \(conflict.teamNumber), match \(conflict.matchNumber)."
+                statusIsError = false
+            }
         } catch {
             status = error.localizedDescription
             statusIsError = true
             NSSound.beep()
         }
         scannerFocused = true
+    }
+}
+
+private struct ScanConflictView: View {
+    let conflict: ScanConflict
+    let onResolve: (ScanConflictResolution) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Conflicting scouting entry", systemImage: "exclamationmark.triangle.fill")
+                .font(.title2.bold())
+                .foregroundStyle(.orange)
+            Text("Team \(conflict.teamNumber), match \(conflict.matchNumber) is already in the sheet. Compare the changed fields before choosing what to keep.")
+                .foregroundStyle(.secondary)
+
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
+                GridRow {
+                    Text("Field").bold()
+                    Text("Existing").bold()
+                    Text("New scan").bold()
+                }
+                Divider().gridCellColumns(3)
+                ForEach(conflict.differences.prefix(12)) { difference in
+                    GridRow {
+                        Text(difference.columnName).lineLimit(1)
+                        Text(difference.previousValue.isEmpty ? "—" : difference.previousValue).lineLimit(2)
+                        Text(difference.scannedValue.isEmpty ? "—" : difference.scannedValue).lineLimit(2)
+                    }
+                    .font(.callout)
+                }
+            }
+            .padding(12)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+
+            if conflict.differences.count > 12 {
+                Text("Plus \(conflict.differences.count - 12) additional changed fields.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Cancel", role: .cancel, action: onCancel)
+                Spacer()
+                Button("Keep Both") { onResolve(.keepBoth) }
+                Button("Replace Existing") { onResolve(.replaceExisting) }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 680)
     }
 }
 

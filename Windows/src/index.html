@@ -19,10 +19,14 @@
       <nav aria-label="Main navigation">
         <button class="nav-button active" data-view="sheet">Spreadsheet</button>
         <button class="nav-button" data-view="scanner">Scanner Intake</button>
+        <button class="nav-button" data-view="status">Event Status</button>
         <button class="nav-button" data-view="charts">Team Charts</button>
         <button class="nav-button" data-view="analyst">Scout Analyst</button>
       </nav>
       <div class="toolbar">
+        <button id="undo-button" class="secondary" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="redo-button" class="secondary" title="Redo (Ctrl+Shift+Z)">Redo</button>
+        <button id="paste-rows-button" class="secondary">Paste rows</button>
         <button id="import-button" class="secondary">Import CSV</button>
         <button id="export-button" class="secondary">Export CSV</button>
         <button id="add-row-button" class="primary">+ Add row</button>
@@ -42,6 +46,35 @@
             <span id="row-count" class="pill">0 entries</span>
           </div>
           <div id="sheet-container" class="sheet-container" tabindex="0"></div>
+        </section>
+
+        <section id="status-view" class="view" aria-labelledby="status-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Event-day reliability</p>
+              <h2 id="status-heading">Event Status</h2>
+            </div>
+            <button id="create-backup-button" class="secondary">Create backup</button>
+          </div>
+          <div id="status-summary" class="stat-grid"></div>
+          <div class="status-grid">
+            <article class="card status-card">
+              <h3>Data quality</h3>
+              <div id="quality-list"></div>
+            </article>
+            <article class="card status-card">
+              <h3>Match coverage</h3>
+              <div id="match-coverage"></div>
+            </article>
+            <article class="card status-card">
+              <h3>Team coverage</h3>
+              <div id="team-coverage"></div>
+            </article>
+            <article class="card status-card">
+              <h3>Local backups</h3>
+              <div id="backup-list"></div>
+            </article>
+          </div>
         </section>
 
         <section id="scanner-view" class="view" aria-labelledby="scanner-heading">
@@ -122,6 +155,28 @@
         <p class="ranking-note">EPA is a scouting projection, not official Statbotics EPA. Lower breakdown rate ranks higher.</p>
       </aside>
     </main>
+
+    <dialog id="conflict-dialog" class="conflict-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Review before saving</p>
+          <h2 id="conflict-title">Conflicting scouting entry</h2>
+        </div>
+        <button id="conflict-close" class="secondary" aria-label="Close">×</button>
+      </div>
+      <p id="conflict-description" class="message"></p>
+      <div class="conflict-table-wrap">
+        <table class="conflict-table">
+          <thead><tr><th>Field</th><th>Existing</th><th>New scan</th></tr></thead>
+          <tbody id="conflict-body"></tbody>
+        </table>
+      </div>
+      <div class="dialog-actions">
+        <button id="conflict-cancel" class="secondary">Cancel</button>
+        <button id="conflict-keep" class="secondary">Keep both</button>
+        <button id="conflict-replace" class="primary">Replace existing</button>
+      </div>
+    </dialog>
 
     <script src="core.js"></script>
     <script src="app.js"></script>
