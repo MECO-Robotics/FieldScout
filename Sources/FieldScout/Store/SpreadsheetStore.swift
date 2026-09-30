@@ -66,9 +66,9 @@ final class SpreadsheetStore: ObservableObject {
 
         if let data = try? Data(contentsOf: saveURL),
            let decoded = try? JSONDecoder().decode(SheetDocument.self, from: data) {
-            document = Self.migrateOldEmptyStarterIfNeeded(decoded)
+            document = Self.migrateDocument(decoded)
         } else if let recovered = Self.loadNewestBackup(from: backupDirectory) {
-            document = Self.migrateOldEmptyStarterIfNeeded(recovered)
+            document = Self.migrateDocument(recovered)
             errorMessage = "The main scouting file could not be opened, so FieldScout recovered the newest local backup."
         } else {
             document = .starter()
@@ -95,6 +95,7 @@ final class SpreadsheetStore: ObservableObject {
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
+    var meaningfulRowCount: Int { document.rows.filter { !Self.isBlank($0) }.count }
 
     func value(rowID: UUID, columnID: UUID) -> String {
         document.rows.first(where: { $0.id == rowID })?.values[columnID] ?? ""
@@ -138,6 +139,7 @@ final class SpreadsheetStore: ObservableObject {
         switch parsed {
         case .named(let fields):
             for (name, value) in fields {
+                let storedValue = QRScoutSchema.expandedValue(value, forColumnNamed: name)
                 let column: SheetColumn
                 let inferredRole = CSVService.inferRole(from: name)
                 let roleMatches = inferredRole == .none
@@ -150,13 +152,13 @@ final class SpreadsheetStore: ObservableObject {
                 } else {
                     let created = SheetColumn(
                         name: name,
-                        type: ScanPayloadService.inferredType(for: value),
+                        type: ScanPayloadService.inferredType(for: storedValue),
                         role: inferredRole
                     )
                     document.columns.append(created)
                     column = created
                 }
-                values[column.id] = value
+                values[column.id] = storedValue
             }
 
         case .positional(let fields):
@@ -184,7 +186,8 @@ final class SpreadsheetStore: ObservableObject {
                 document.columns.insert(contentsOf: created, at: 0)
                 qrColumns = created
             }
-            for (column, value) in zip(qrColumns, fields) {
+            let expandedFields = QRScoutSchema.expandedLegacyFields(fields)
+            for (column, value) in zip(qrColumns, expandedFields) {
                 values[column.id] = value
             }
             successMessage = "QRScout scan accepted — all 29 fields added and rankings refreshed."
@@ -223,7 +226,7 @@ final class SpreadsheetStore: ObservableObject {
         if recordHistory { recordUndo() }
         appendScannedRow(values: values, rawPayload: raw)
         if successMessage.hasPrefix("QRScout") { return .accepted(successMessage) }
-        return .accepted("Scan accepted — row \(document.rows.count) added and rankings refreshed.")
+        return .accepted("Scan accepted — entry \(meaningfulRowCount) added and rankings refreshed.")
     }
 
     /// Converts a barcode that was scanned or pasted into a blank spreadsheet row.
@@ -267,6 +270,7 @@ final class SpreadsheetStore: ObservableObject {
         case .keepBoth:
             document.rows.append(ScoutingRow(values: conflict.values))
         }
+        ensureTrailingBlankRow()
         var archived = document.ingestedScanPayloads ?? []
         archived.append(conflict.rawPayload)
         document.ingestedScanPayloads = archived
@@ -285,12 +289,14 @@ final class SpreadsheetStore: ObservableObject {
         guard let row = document.rows.first(where: { $0.id == rowID }) else { return }
         recordUndo()
         document.rows.append(ScoutingRow(values: row.values))
+        ensureTrailingBlankRow()
         touchAndSave()
     }
 
     func deleteRow(_ rowID: UUID) {
         recordUndo()
         document.rows.removeAll { $0.id == rowID }
+        ensureTrailingBlankRow()
         touchAndSave(createBackup: true)
     }
 
@@ -319,7 +325,7 @@ final class SpreadsheetStore: ObservableObject {
     func replaceDocument(with imported: SheetDocument) {
         recordUndo()
         createBackupIfNeeded(force: true)
-        document = imported
+        document = Self.migrateDocument(imported)
         selectedTeamNumber = nil
         touchAndSave()
     }
@@ -382,6 +388,7 @@ final class SpreadsheetStore: ObservableObject {
             }
             document.rows.append(ScoutingRow(values: values))
         }
+        ensureTrailingBlankRow()
         touchAndSave()
         return "Pasted \(records.count) row\(records.count == 1 ? "" : "s") from the clipboard."
     }
@@ -396,7 +403,7 @@ final class SpreadsheetStore: ObservableObject {
             let restored = try JSONDecoder().decode(SheetDocument.self, from: data)
             recordUndo()
             createBackupIfNeeded(force: true)
-            document = restored
+            document = Self.migrateDocument(restored)
             selectedTeamNumber = nil
             touchAndSave()
         } catch {
@@ -445,8 +452,9 @@ final class SpreadsheetStore: ObservableObject {
     }
 
     private func appendScannedRow(values: [UUID: String], rawPayload: String) {
-        removeBlankStarterRowIfNeeded()
+        document.rows.removeAll(where: Self.isBlank)
         document.rows.append(ScoutingRow(values: values))
+        document.rows.append(ScoutingRow())
         var archivedPayloads = document.ingestedScanPayloads ?? []
         archivedPayloads.append(rawPayload)
         document.ingestedScanPayloads = archivedPayloads
@@ -458,6 +466,11 @@ final class SpreadsheetStore: ObservableObject {
            document.rows[0].values.values.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             document.rows.removeAll()
         }
+    }
+
+    private func ensureTrailingBlankRow() {
+        document.rows.removeAll(where: Self.isBlank)
+        document.rows.append(ScoutingRow())
     }
 
     private func recordUndo(coalescingKey: String? = nil) {
@@ -512,7 +525,7 @@ final class SpreadsheetStore: ObservableObject {
         value.lowercased().filter(\.isLetter)
     }
 
-    private static func migrateOldEmptyStarterIfNeeded(_ candidate: SheetDocument) -> SheetDocument {
+    private static func migrateDocument(_ candidate: SheetDocument) -> SheetDocument {
         let oldStarterHeaders = [
             "Scout", "Match", "Team", "Alliance", "Auto Points", "Teleop Points",
             "Endgame Points", "Penalty Points", "Defense Rating", "Broke Down", "Notes"
@@ -521,7 +534,23 @@ final class SpreadsheetStore: ObservableObject {
         let hasEnteredData = candidate.rows.contains { row in
             row.values.values.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         }
-        return isOldStarter && !hasEnteredData ? .starter() : candidate
+        var migrated = isOldStarter && !hasEnteredData ? .starter() : candidate
+        for column in migrated.columns {
+            for index in migrated.rows.indices {
+                let current = migrated.rows[index].values[column.id] ?? ""
+                migrated.rows[index].values[column.id] = QRScoutSchema.expandedValue(
+                    current,
+                    forColumnNamed: column.name
+                )
+            }
+        }
+        migrated.rows.removeAll(where: Self.isBlank)
+        migrated.rows.append(ScoutingRow())
+        return migrated
+    }
+
+    private static func isBlank(_ row: ScoutingRow) -> Bool {
+        row.values.values.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private static func loadNewestBackup(from directory: URL) -> SheetDocument? {

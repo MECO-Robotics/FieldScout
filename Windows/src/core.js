@@ -38,6 +38,48 @@
   ];
 
   const HEADER_NAMES = QRSCOUT_FIELDS.map((field) => field[0]);
+  const SCOUT_FACING_VALUES = {
+    startingposition: {
+      OT: "Outpost Trench",
+      OBFT: "Outpost Bump — Trench",
+      OBFH: "Outpost Bump — Hub",
+      H: "Hub",
+      DBFH: "Depot Bump — Hub",
+      DBFT: "Depot Bump — Trench",
+      DT: "Depot Trench"
+    },
+    wherecollectedfuel: {
+      1: "Outpost",
+      2: "Depot",
+      3: "Neutral Zone",
+      4: "Neutral Zone — 2nd Pass",
+      5: "Did Not Move",
+      6: "Moved Without Collecting"
+    },
+    otherautoactions: { 1: "Passed", 2: "Bump", 3: "Trench" },
+    bumptrench: { 1: "Bump", 2: "Trench" },
+    opposingzoneactions: { 1: "Collecting", 2: "Defense" },
+    scoringlocation: {
+      1: "Outpost Trench",
+      2: "Outpost",
+      3: "Hub",
+      4: "Ladder",
+      5: "Depot",
+      6: "Depot Trench"
+    }
+  };
+
+  function expandedScoutFacingValue(value, columnName) {
+    const values = SCOUT_FACING_VALUES[compactName(columnName)];
+    if (!values) return String(value ?? "");
+    return String(value ?? "")
+      .split(",")
+      .map((component) => {
+        const original = component.trim();
+        return values[original.toUpperCase()] || original;
+      })
+      .join(", ");
+  }
 
   function id(prefix = "id") {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -94,6 +136,16 @@
       role: column.role || "none"
     }));
     document.rows = document.rows.map((row) => ({ id: row.id || id("row"), values: row.values || {} }));
+    for (const column of document.columns) {
+      if (!SCOUT_FACING_VALUES[compactName(column.name)]) continue;
+      document.rows.forEach((row) => {
+        row.values[column.id] = expandedScoutFacingValue(row.values[column.id], column.name);
+      });
+    }
+    document.rows = document.rows.filter((row) => (
+      Object.values(row.values).some((value) => String(value).trim())
+    ));
+    document.rows.push(blankRow(document.columns));
     return document;
   }
 
@@ -146,7 +198,10 @@
 
   function exportCSV(document) {
     const lines = [document.columns.map((column) => escapeCSV(column.name)).join(",")];
-    for (const row of document.rows) {
+    const meaningful = document.rows.filter((row) => (
+      Object.values(row.values).some((value) => String(value).trim())
+    ));
+    for (const row of meaningful) {
       lines.push(document.columns.map((column) => escapeCSV(row.values[column.id] || "")).join(","));
     }
     return `${lines.join("\n")}\n`;
@@ -289,6 +344,9 @@
         }
       }
       values = Object.fromEntries(qrScoutColumns().map((column, index) => [column.id, parsed.fields[index] || ""]));
+      for (const index of [3, 6, 7, 11, 14, 21]) {
+        values[`qr-${index}`] = expandedScoutFacingValue(values[`qr-${index}`], HEADER_NAMES[index]);
+      }
     } else if (parsed.kind === "named") {
       const columnsByName = new Map(document.columns.map((column) => [compactName(column.name), column]));
       for (const [name, value] of parsed.entries) {
@@ -299,7 +357,7 @@
           document.columns.push(column);
           columnsByName.set(key, column);
         }
-        values[column.id] = value;
+        values[column.id] = expandedScoutFacingValue(value, name);
       }
     } else {
       while (document.columns.length < parsed.fields.length) {
@@ -349,6 +407,8 @@
       document.rows = document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
       document.rows.push({ id: id("row"), values });
     }
+    document.rows = document.rows.filter((row) => Object.values(row.values).some((value) => String(value).trim()));
+    document.rows.push(blankRow(document.columns));
     document.ingestedScanPayloads.push(exactRaw);
     document.updatedAt = new Date().toISOString();
     return {

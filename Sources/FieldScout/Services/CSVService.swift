@@ -53,7 +53,11 @@ enum CSVService {
 
     static func export(_ document: SheetDocument, to url: URL) throws {
         var lines = [document.columns.map { escape($0.name) }.joined(separator: ",")]
-        lines += document.rows.map { row in
+        lines += document.rows.filter { row in
+            row.values.values.contains {
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        }.map { row in
             document.columns.map { escape(row.values[$0.id] ?? "") }.joined(separator: ",")
         }
         try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)

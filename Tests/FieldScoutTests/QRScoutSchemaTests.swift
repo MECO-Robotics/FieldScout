@@ -28,6 +28,16 @@ final class QRScoutSchemaTests: XCTestCase {
         XCTAssertEqual(document.columns[17].role, .breakdown)
         XCTAssertEqual(document.columns[18].role, .breakdown)
         XCTAssertEqual(document.columns[24].role, .defenseRating)
+        XCTAssertEqual(QRScoutSchema.expandedStartingPosition("OBFH"), "Outpost Bump — Hub")
+        XCTAssertEqual(QRScoutSchema.expandedStartingPosition("Depot Trench"), "Depot Trench")
+        XCTAssertEqual(
+            QRScoutSchema.expandedValue("1,3", forColumnNamed: "Where collected Fuel"),
+            "Outpost, Neutral Zone"
+        )
+        XCTAssertEqual(
+            QRScoutSchema.expandedValue("1,6", forColumnNamed: "Scoring Location"),
+            "Outpost Trench, Depot Trench"
+        )
     }
 
     func testExactLegacyPayloadBecomesQRScoutScan() throws {

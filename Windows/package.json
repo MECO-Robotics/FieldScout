@@ -1,6 +1,6 @@
 {
   "name": "fieldscout-windows",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Offline Windows spreadsheet and analytics app for FRC scouting",
   "main": "main.js",
   "author": "MECO Robotics Team 8324",

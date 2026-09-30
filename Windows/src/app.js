@@ -207,6 +207,7 @@
             refreshAnalytics();
           });
         } else {
+          const packedScanState = { timer: null };
           input.type = column.type === "integer" || column.type === "decimal" ? "number" : "text";
           if (column.type === "decimal") input.step = "any";
           input.value = row.values[column.id] || "";
@@ -216,6 +217,15 @@
             scheduleSave();
             refreshAnalytics();
             updateCounts();
+            window.clearTimeout(packedScanState.timer);
+            const candidate = input.value;
+            if (core.isPackedScan(candidate)) {
+              packedScanState.timer = window.setTimeout(() => {
+                if (document.body.contains(input) && input.value === candidate) {
+                  acceptScanFromCell(row.id, column.id);
+                }
+              }, 350);
+            }
           });
           input.addEventListener("keydown", (event) => {
             if (event.key !== "Enter" || !core.isPackedScan(input.value)) return;

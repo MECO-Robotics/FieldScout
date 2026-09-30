@@ -42,10 +42,11 @@ test("scanner preserves empty first and last QRScout fields", () => {
   fields[28] = "";
   const result = core.ingestScan(core.createDocument(), fields.join("\t"));
   assert.equal(result.accepted, true);
-  assert.equal(result.document.rows.length, 1);
+  assert.equal(result.document.rows.length, 2);
   assert.equal(result.document.rows[0].values["qr-0"], "");
   assert.equal(result.document.rows[0].values["qr-1"], "1");
   assert.equal(result.document.rows[0].values["qr-28"], "");
+  assert.equal(Object.values(result.document.rows[1].values).every((value) => value === ""), true);
 });
 
 test("scanner normalizes printable tab aliases", () => {
@@ -65,7 +66,7 @@ test("barcode scanned into one sheet cell is distributed across the row", () => 
 
   assert.equal(result.handled, true);
   assert.equal(result.accepted, true);
-  assert.equal(result.document.rows.length, 1);
+  assert.equal(result.document.rows.length, 2);
   assert.equal(result.document.rows[0].values["qr-1"], "1");
   assert.equal(result.document.rows[0].values["qr-2"], "2");
   assert.equal(result.document.rows[0].values["qr-0"], "0");
@@ -77,7 +78,7 @@ test("duplicate scans are ignored without adding another row", () => {
   const second = core.ingestScan(first.document, payload);
   assert.equal(first.accepted, true);
   assert.equal(second.accepted, false);
-  assert.equal(second.document.rows.length, 1);
+  assert.equal(second.document.rows.length, 2);
 });
 
 test("2026 QRScout scoring and breakdown fields produce matching analytics", () => {
@@ -102,6 +103,45 @@ test("2026 QRScout scoring and breakdown fields produce matching analytics", () 
   assert.equal(teams[0].averageDefense, 5);
 });
 
+test("starting position codes expand to scout-facing names and leave a new row", () => {
+  const fields = Array(29).fill("");
+  fields[0] = "AJ";
+  fields[1] = "8";
+  fields[2] = "8324";
+  fields[3] = "DBFT";
+  fields[6] = "1,3";
+  fields[21] = "1,6";
+
+  const result = core.ingestScan(core.createDocument(), fields.join("\t"));
+
+  assert.equal(result.document.rows[0].values["qr-3"], "Depot Bump — Trench");
+  assert.equal(result.document.rows[0].values["qr-6"], "Outpost, Neutral Zone");
+  assert.equal(result.document.rows[0].values["qr-21"], "Outpost Trench, Depot Trench");
+  assert.equal(result.document.rows.length, 2);
+  assert.equal(Object.values(result.document.rows[1].values).every((value) => value === ""), true);
+});
+
+test("saved numeric locations migrate and regain a trailing scanner row", () => {
+  const document = core.createDocument();
+  document.rows = [{
+    id: "saved",
+    values: {
+      "qr-0": "AJ",
+      "qr-3": "OT",
+      "qr-6": "2,4",
+      "qr-21": "3,5"
+    }
+  }];
+
+  const migrated = core.normalizeDocument(document);
+
+  assert.equal(migrated.rows.length, 2);
+  assert.equal(migrated.rows[0].values["qr-3"], "Outpost Trench");
+  assert.equal(migrated.rows[0].values["qr-6"], "Depot, Neutral Zone — 2nd Pass");
+  assert.equal(migrated.rows[0].values["qr-21"], "Hub, Depot");
+  assert.equal(Object.values(migrated.rows[1].values).every((value) => value === ""), true);
+});
+
 test("CSV import and export preserve quoted commas and multiline comments", () => {
   const csv = `${core.HEADER_NAMES.map((value) => `"${value}"`).join(",")}\nAJ,12,8324,,,,,,,,,,,,,,,,,,,,,,,,,,"fast, stable\nsecond line"\n`;
   const document = core.importCSV(csv, "event");
@@ -110,6 +150,15 @@ test("CSV import and export preserve quoted commas and multiline comments", () =
   const exported = core.exportCSV(document);
   const reimported = core.importCSV(exported, "event");
   assert.equal(reimported.rows[0].values["qr-28"], "fast, stable\nsecond line");
+});
+
+test("CSV export omits the automatic blank scanner row", () => {
+  const document = core.createDocument();
+  document.rows = [
+    { id: "filled", values: { "qr-0": "AJ" } },
+    core.blankRow(document.columns)
+  ];
+  assert.equal(core.parseCSV(core.exportCSV(document)).length, 2);
 });
 
 test("offline analyst compares teams without network access", () => {
@@ -141,11 +190,11 @@ test("same team and match produces a reviewable conflict", () => {
     previousValue: "3",
     scannedValue: "5"
   });
-  assert.equal(conflict.document.rows.length, 1);
+  assert.equal(conflict.document.rows.length, 2);
 
   const replaced = core.ingestScan(first.document, secondFields.join("\t"), "replace");
   assert.equal(replaced.accepted, true);
-  assert.equal(replaced.document.rows.length, 1);
+  assert.equal(replaced.document.rows.length, 2);
   assert.equal(replaced.document.rows[0].values["qr-24"], "5");
 });
 

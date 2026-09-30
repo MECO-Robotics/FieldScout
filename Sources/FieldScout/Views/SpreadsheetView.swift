@@ -151,7 +151,9 @@ struct SpreadsheetView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 11)
         .background(Color.accentColor.opacity(0.08))
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 1)
+        }
     }
 
     private var meaningfulRowCount: Int {
@@ -235,7 +237,9 @@ struct SpreadsheetView: View {
                                 .buttonStyle(.plain)
                                 .frame(width: columnWidth(column), height: 44)
                                 .background(Color(nsColor: .controlBackgroundColor))
-                                .overlay(alignment: .trailing) { Divider() }
+                                .overlay(alignment: .trailing) {
+                                    Rectangle().fill(Color(nsColor: .separatorColor)).frame(width: 1)
+                                }
                                 .contextMenu {
                                     Button("Column Settings…") { editingColumn = column }
                                     Divider()
@@ -243,7 +247,9 @@ struct SpreadsheetView: View {
                                 }
                             }
                         }
-                        .overlay(alignment: .bottom) { Divider() }
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 1)
+                        }
                         .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
                     }
                 }
@@ -319,8 +325,12 @@ private struct SpreadsheetCell: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .trailing) { Divider() }
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Color(nsColor: .separatorColor)).frame(width: 1)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 1)
+        }
     }
 
     private func handlePackedScan() {

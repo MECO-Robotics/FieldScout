@@ -2,6 +2,26 @@ import XCTest
 @testable import FieldScout
 
 final class CSVServiceTests: XCTestCase {
+    func testExportOmitsAutomaticBlankScannerRow() throws {
+        let columns = QRScoutSchema.columns()
+        let document = SheetDocument(
+            title: "Test",
+            columns: columns,
+            rows: [
+                ScoutingRow(values: [columns[0].id: "AJ"]),
+                ScoutingRow()
+            ],
+            updatedAt: .now
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).csv")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try CSVService.export(document, to: url)
+        let exported = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertEqual(exported.components(separatedBy: .newlines).filter { !$0.isEmpty }.count, 2)
+    }
+
     func testQuotedCSVParsing() {
         let parsed = CSVService.parse("Team,Notes\n254,\"Fast, reliable\"\n1678,\"Line one\nLine two\"\n")
 
