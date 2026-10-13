@@ -34,6 +34,8 @@ enum ParsedScan: Equatable {
 }
 
 enum ScanPayloadService {
+    static let qrScoutEnvelopePrefix = "QRSCOUT1-"
+
     static func normalizedPayload(_ rawPayload: String) -> String {
         var payload = rawPayload.trimmingCharacters(in: CharacterSet(charactersIn: " \r\n"))
         guard !payload.isEmpty, payload.first != "{" else { return payload }
@@ -64,10 +66,37 @@ enum ScanPayloadService {
         }
     }
 
+    /// Only complete, self-identifying QRScout records may be committed after an
+    /// idle pause. Generic rows still require Return or the Add Scan button because
+    /// their final field count is unknown.
+    static func isCompleteAutomaticScan(_ rawPayload: String) -> Bool {
+        guard let parsed = try? parse(rawPayload) else { return false }
+        if case .qrScoutLegacy = parsed { return true }
+        return false
+    }
+
     static func parse(_ rawPayload: String) throws -> ParsedScan {
         // Preserve leading and trailing tabs because empty first/last QRScout fields are significant.
         let payload = normalizedPayload(rawPayload)
         guard !payload.isEmpty else { throw ScanPayloadError.empty }
+
+        if payload.hasPrefix(qrScoutEnvelopePrefix) {
+            let encoded = String(payload.dropFirst(qrScoutEnvelopePrefix.count))
+            var base64 = encoded
+                .replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")
+            let padding = (4 - base64.count % 4) % 4
+            base64.append(String(repeating: "=", count: padding))
+            guard let data = Data(base64Encoded: base64),
+                  let decoded = String(data: data, encoding: .utf8) else {
+                throw ScanPayloadError.unsupported
+            }
+            let fields = decoded.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard fields.count == QRScoutSchema.fieldCount else {
+                throw ScanPayloadError.unsupported
+            }
+            return .qrScoutLegacy(fields)
+        }
 
         if payload.first == "{",
            let data = payload.data(using: .utf8),

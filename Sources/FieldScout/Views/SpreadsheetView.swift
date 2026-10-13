@@ -313,7 +313,7 @@ private struct SpreadsheetCell: View {
                     .onSubmit(handlePackedScan)
                     .task(id: value.wrappedValue) {
                         let candidate = value.wrappedValue
-                        guard ScanPayloadService.isPackedRow(candidate) else { return }
+                        guard ScanPayloadService.isCompleteAutomaticScan(candidate) else { return }
                         do {
                             try await Task.sleep(for: .milliseconds(350))
                         } catch {

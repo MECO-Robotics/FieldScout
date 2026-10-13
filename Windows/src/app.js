@@ -219,7 +219,7 @@
             updateCounts();
             window.clearTimeout(packedScanState.timer);
             const candidate = input.value;
-            if (core.isPackedScan(candidate)) {
+            if (core.isCompleteAutomaticScan(candidate)) {
               packedScanState.timer = window.setTimeout(() => {
                 if (document.body.contains(input) && input.value === candidate) {
                   acceptScanFromCell(row.id, column.id);
@@ -724,7 +724,7 @@
     byId("scanner-input").addEventListener("input", (event) => {
       window.clearTimeout(scannerIdleTimer);
       const candidate = event.currentTarget.value;
-      if (!core.isPackedScan(candidate)) return;
+      if (!core.isCompleteAutomaticScan(candidate)) return;
       scannerIdleTimer = window.setTimeout(() => {
         if (byId("scanner-input").value === candidate) acceptScan();
       }, 350);

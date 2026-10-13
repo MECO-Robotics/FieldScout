@@ -57,6 +57,28 @@ test("scanner normalizes printable tab aliases", () => {
   assert.equal(result.document.rows[0].values["qr-28"], "28");
 });
 
+test("scanner decodes the keyboard-safe QRScout envelope", () => {
+  const fields = Array.from({ length: 29 }, (_value, index) => `field ${index} — value`);
+  const encoded = Buffer.from(fields.join("\t"), "utf8").toString("base64url");
+  const payload = `QRSCOUT1-${encoded}`;
+
+  const result = core.ingestScan(core.createDocument(), payload);
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.document.rows[0].values["qr-0"], fields[0]);
+  assert.equal(result.document.rows[0].values["qr-28"], fields[28]);
+  assert.equal(core.isCompleteAutomaticScan(payload), true);
+});
+
+test("partial legacy scans wait for the remaining fields", () => {
+  const partial = Array.from({ length: 8 }, (_value, index) => String(index)).join("\t");
+  const complete = Array.from({ length: 29 }, (_value, index) => String(index)).join("\t");
+
+  assert.equal(core.isPackedScan(partial), true);
+  assert.equal(core.isCompleteAutomaticScan(partial), false);
+  assert.equal(core.isCompleteAutomaticScan(complete), true);
+});
+
 test("barcode scanned into one sheet cell is distributed across the row", () => {
   const document = core.createDocument();
   const sourceRow = document.rows[0];

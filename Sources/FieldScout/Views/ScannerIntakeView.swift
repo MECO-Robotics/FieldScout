@@ -68,7 +68,7 @@ struct ScannerIntakeView: View {
                     .font(.headline)
                 FormatExample(label: "Named fields", example: "team=254;match=12;autoPoints=18;brokeDown=no")
                 FormatExample(label: "JSON", example: "{\"Team\":254,\"Match\":12,\"Broke Down\":false}")
-                FormatExample(label: "QRScout", example: "AJ⇥12⇥8324⇥Outpost Trench⇥false⇥… (29 tab-separated values)")
+                FormatExample(label: "QRScout", example: "QRSCOUT1-… (keyboard-safe encoded record)")
                 FormatExample(label: "Generic CSV", example: "Alex,12,254,Red,18,42,6,0,3,No,Fast cycles")
                 Text("The exact barcode is kept in the offline scan archive for duplicate protection without adding another spreadsheet column.")
                     .font(.caption)
@@ -86,7 +86,7 @@ struct ScannerIntakeView: View {
         .onTapGesture { scannerFocused = true }
         .task(id: payload) {
             let candidate = payload
-            guard ScanPayloadService.isPackedRow(candidate) else { return }
+            guard ScanPayloadService.isCompleteAutomaticScan(candidate) else { return }
             do {
                 try await Task.sleep(for: .milliseconds(350))
             } catch {

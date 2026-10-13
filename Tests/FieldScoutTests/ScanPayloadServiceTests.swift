@@ -40,6 +40,28 @@ final class ScanPayloadServiceTests: XCTestCase {
         )
     }
 
+    func testParsesKeyboardSafeQRScoutEnvelope() throws {
+        let values = (0..<QRScoutSchema.fieldCount).map { "field \($0) — value" }
+        let tabPayload = values.joined(separator: "\t")
+        let base64URL = Data(tabPayload.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let payload = ScanPayloadService.qrScoutEnvelopePrefix + base64URL
+
+        XCTAssertEqual(try ScanPayloadService.parse(payload), .qrScoutLegacy(values))
+        XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(payload))
+    }
+
+    func testPartialLegacyScanDoesNotAutoCommit() {
+        let partial = (0..<8).map(String.init).joined(separator: "\t")
+        let complete = (0..<QRScoutSchema.fieldCount).map(String.init).joined(separator: "\t")
+
+        XCTAssertTrue(ScanPayloadService.isPackedRow(partial))
+        XCTAssertFalse(ScanPayloadService.isCompleteAutomaticScan(partial))
+        XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(complete))
+    }
+
     func testOnlyMultiFieldRowsAreRecognizedAsPackedScans() {
         XCTAssertFalse(ScanPayloadService.isPackedRow("Fast, stable"))
         XCTAssertTrue(ScanPayloadService.isPackedRow((0..<29).map(String.init).joined(separator: "\t")))

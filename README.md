@@ -9,10 +9,10 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 - Editable spreadsheet with text, numeric, and checkbox cells
 - CSV import and export, including quoted commas and multiline notes
 - Scanner Intake screen for iPad-generated barcodes and keyboard-wedge scanners
-- JSON, `key=value`, CSV-row, and tab-separated scan payloads
+- Keyboard-safe QRScout records plus JSON, `key=value`, CSV-row, and legacy tab-separated scan payloads
 - Exact raw scan preservation in the local document archive and duplicate-scan protection
 - Team-and-match conflict review with side-by-side values and replace/keep-both choices
-- Exact compatibility with QRScout Legacy's 29-field tab-separated barcode contract
+- Exact compatibility with QRScout Legacy's keyboard-safe and legacy 29-field barcode contracts
 - Preservation of unrecognized CSV columns
 - Configurable analytics roles for any column
 - Automatic grouping by team number without modifying source rows
@@ -50,7 +50,7 @@ Version 0.5.0 is the first updater-enabled release. Anyone running 0.4.0 or earl
 3. Show the scouting barcode on the iPad and scan it.
 4. FieldScout appends the 29 QRScout values as one row, leaves a fresh blank row ready for the next scan, archives the original barcode outside the visible grid, and refreshes rankings immediately.
 
-FieldScout imports a complete barcode automatically after the scanner pauses, splits its values into separate columns, and then returns focus for the next scan. The scanner does not need to send Return or start a new line. A packed barcode accidentally scanned into a blank spreadsheet cell is also detected and distributed across that row. Literal tabs and common printable scanner aliases such as `<TAB>`, `\t`, and `⇥` are accepted. Exact duplicate payloads are ignored. A QRScout Legacy barcode is recognized by its 29 values and mapped to the precise source-app field order. Starting positions, collection locations, scoring locations, and multi-select actions are stored using the full names shown to the scout; older QRScout codes are expanded automatically. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported.
+FieldScout imports a complete barcode automatically after the scanner pauses, splits its values into separate columns, and then returns focus for the next scan. The scanner does not need to send Return or start a new line. Current QRScout versions wrap all 29 values in a keyboard-safe `QRSCOUT1-` record, preventing field separators from moving focus and preventing a partial scan from becoming a second row. A packed barcode accidentally scanned into a blank spreadsheet cell is also detected and distributed across that row. Older QRScout barcodes remain supported: literal tabs and common printable scanner aliases such as `<TAB>`, `\t`, and `⇥` are accepted, but FieldScout waits for all 29 fields before importing automatically. Exact duplicate payloads are ignored. Starting positions, collection locations, scoring locations, and multi-select actions are stored using the full names shown to the scout; older QRScout codes are expanded automatically. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported through Return or **Add Scan**.
 
 If a different barcode has the same team and match as an existing row, FieldScout pauses and shows the changed values side by side. Choose **Replace Existing**, **Keep Both**, or cancel without changing the sheet.
 
@@ -149,4 +149,4 @@ cd Windows
 npm test
 ```
 
-The macOS and Windows test suites cover the exact 29-field QRScout contract, tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.
+The macOS and Windows test suites cover the exact 29-field QRScout contract, keyboard-safe decoding, partial-scan rejection, legacy tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.

@@ -73,6 +73,32 @@ final class SpreadsheetStoreTests: XCTestCase {
         XCTAssertEqual(store.meaningfulRowCount, 1)
     }
 
+    func testKeyboardSafeQRScoutScanCreatesExactlyOneEntry() throws {
+        let store = makeStore()
+        var fields = Array(repeating: "", count: QRScoutSchema.fieldCount)
+        fields[0] = "AJ"
+        fields[1] = "18"
+        fields[2] = "8324"
+        fields[3] = "Outpost Bump — Trench"
+        fields[28] = "Fast and reliable"
+        let tabPayload = fields.joined(separator: "\t")
+        let base64URL = Data(tabPayload.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+
+        guard case .accepted = try store.ingestScan(ScanPayloadService.qrScoutEnvelopePrefix + base64URL) else {
+            return XCTFail("The keyboard-safe scan should be accepted")
+        }
+
+        XCTAssertEqual(store.meaningfulRowCount, 1)
+        XCTAssertEqual(store.document.rows.count, 2)
+        XCTAssertEqual(store.document.rows[0].values[store.document.columns[2].id], "8324")
+        XCTAssertEqual(store.document.rows[0].values[store.document.columns[3].id], "Outpost Bump — Trench")
+        XCTAssertEqual(store.document.rows[0].values[store.document.columns[28].id], "Fast and reliable")
+        XCTAssertTrue(store.document.rows[1].values.values.allSatisfy(\.isEmpty))
+    }
+
     func testExistingNumericLocationsAreMigratedAndBlankRowIsRestoredOnLaunch() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("FieldScoutMigrationTests-\(UUID().uuidString)", isDirectory: true)

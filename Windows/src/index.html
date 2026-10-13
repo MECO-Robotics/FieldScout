@@ -89,7 +89,7 @@
           </div>
           <div class="card scanner-card">
             <label for="scanner-input">Scan a QRScout barcode</label>
-            <textarea id="scanner-input" rows="7" spellcheck="false" autofocus placeholder="The 29 tab-separated QRScout values appear here…"></textarea>
+            <textarea id="scanner-input" rows="7" spellcheck="false" autofocus placeholder="The encoded QRScout scan appears here…"></textarea>
             <div class="scanner-actions">
               <button id="accept-scan-button" class="primary">Accept scan</button>
               <button id="clear-scan-button" class="secondary">Clear</button>
@@ -97,8 +97,8 @@
             <p id="scanner-status" class="message" role="status">Ready for a scan. FieldScout splits it into columns automatically; Return is optional.</p>
           </div>
           <div class="format-grid">
-            <article class="card"><strong>QRScout</strong><code>AJ⇥12⇥8324⇥OT⇥false⇥…</code><span>Exactly 29 tab-separated fields</span></article>
-            <article class="card"><strong>Also accepted</strong><code>Team Number=8324;Match Number=12</code><span>JSON, named, CSV, or tab-separated data</span></article>
+            <article class="card"><strong>QRScout</strong><code>QRSCOUT1-…</code><span>Keyboard-safe encoded record</span></article>
+            <article class="card"><strong>Also accepted</strong><code>Team Number=8324;Match Number=12</code><span>JSON, named, CSV, or legacy tab-separated data</span></article>
             <article class="card"><strong>Private by design</strong><code>scouting-data.json</code><span>Saved only in this PC's local app-data folder</span></article>
           </div>
         </section>

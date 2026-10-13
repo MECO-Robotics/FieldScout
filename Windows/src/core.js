@@ -38,6 +38,7 @@
   ];
 
   const HEADER_NAMES = QRSCOUT_FIELDS.map((field) => field[0]);
+  const QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT1-";
   const SCOUT_FACING_VALUES = {
     startingposition: {
       OT: "Outpost Trench",
@@ -280,6 +281,22 @@
     const preserved = normalizeScannerPayload(raw);
     if (!preserved) throw new Error("Scan a barcode before adding it.");
 
+    if (preserved.startsWith(QRSCOUT_ENVELOPE_PREFIX)) {
+      try {
+        let base64 = preserved.slice(QRSCOUT_ENVELOPE_PREFIX.length)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+        base64 += "=".repeat((4 - (base64.length % 4)) % 4);
+        const binary = globalThis.atob(base64);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const fields = new TextDecoder().decode(bytes).split("\t");
+        if (fields.length !== QRSCOUT_FIELDS.length) throw new Error("wrong field count");
+        return { kind: "qrScout", fields };
+      } catch (_error) {
+        throw new Error("This QRScout barcode is incomplete or damaged. Scan it again.");
+      }
+    }
+
     if (preserved.trimStart().startsWith("{")) {
       const object = JSON.parse(preserved);
       if (!object || Array.isArray(object) || typeof object !== "object") throw new Error("The JSON scan must be an object.");
@@ -313,6 +330,14 @@
       if (parsed.kind === "qrScout") return true;
       if (parsed.kind === "positional") return parsed.fields.length >= 8;
       return parsed.entries.length >= 2;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function isCompleteAutomaticScan(raw) {
+    try {
+      return parseScan(raw).kind === "qrScout";
     } catch (_error) {
       return false;
     }
@@ -666,6 +691,7 @@
     importCSV,
     parseScan,
     isPackedScan,
+    isCompleteAutomaticScan,
     ingestScan,
     ingestScanFromCell,
     dataQuality,
