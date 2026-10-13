@@ -116,6 +116,13 @@ struct ScannerIntakeView: View {
     }
 
     private func submitScan() {
+        // A keyboard-wedge scanner may send Return just after the complete QR has
+        // already been accepted by the idle timer. Ignore that empty suffix so it
+        // cannot replace the success message with an error or beep.
+        guard !payload.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            scannerFocused = true
+            return
+        }
         do {
             switch try store.ingestScan(payload) {
             case .accepted(let message):

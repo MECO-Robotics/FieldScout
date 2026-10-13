@@ -636,6 +636,12 @@
   function acceptScan() {
     const input = byId("scanner-input");
     const status = byId("scanner-status");
+    // A scanner suffix can arrive just after automatic acceptance. Treat the
+    // resulting empty Return as a no-op instead of showing a false scan error.
+    if (!input.value.trim()) {
+      input.focus();
+      return;
+    }
     try {
       const previousDocument = snapshotDocument();
       const result = core.ingestScan(state.document, input.value);
