@@ -10,6 +10,18 @@ contextBridge.exposeInMainWorld("fieldScoutDesktop", Object.freeze({
   importCSV: () => ipcRenderer.invoke("csv:import"),
   exportCSV: (csvText, suggestedName) => ipcRenderer.invoke("csv:export", csvText, suggestedName),
   checkForUpdates: () => ipcRenderer.invoke("update:check"),
+  getPortalStatus: () => ipcRenderer.invoke("portal:status"),
+  completePortalSubmission: (requestId, result) => ipcRenderer.invoke("portal:submission-result", requestId, result),
+  onPortalSubmission: (callback) => {
+    const listener = (_event, request) => callback(request);
+    ipcRenderer.on("portal:submission", listener);
+    return () => ipcRenderer.removeListener("portal:submission", listener);
+  },
+  onPortalStatus: (callback) => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on("portal:status", listener);
+    return () => ipcRenderer.removeListener("portal:status", listener);
+  },
   onUpdateStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("update:status", listener);

@@ -18,6 +18,7 @@ mkdir -p "$OUTPUT_BUNDLE/Contents/MacOS" "$OUTPUT_BUNDLE/Contents/Resources" "$O
 cp "$RELEASE_BIN_DIR/FieldScout" "$OUTPUT_BUNDLE/Contents/MacOS/FieldScout"
 cp "$PROJECT_ROOT/Resources/Info.plist" "$OUTPUT_BUNDLE/Contents/Info.plist"
 cp "$PROJECT_ROOT/Resources/AppIcon.icns" "$OUTPUT_BUNDLE/Contents/Resources/AppIcon.icns"
+cp "$PROJECT_ROOT/Shared/ScoutingPortal.html" "$OUTPUT_BUNDLE/Contents/Resources/ScoutingPortal.html"
 ditto "$SPARKLE_FRAMEWORK" "$OUTPUT_BUNDLE/Contents/Frameworks/Sparkle.framework"
 chmod +x "$OUTPUT_BUNDLE/Contents/MacOS/FieldScout"
 codesign --force --deep --sign - "$OUTPUT_BUNDLE/Contents/Frameworks/Sparkle.framework"

@@ -575,6 +575,7 @@ final class SpreadsheetStore: ObservableObject {
 
 enum AppSection: String, CaseIterable, Identifiable {
     case sheet = "Scouting Sheet"
+    case portal = "iPad Portal"
     case scanner = "Scanner Intake"
     case status = "Event Status"
     case teams = "Team Charts"
@@ -585,6 +586,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .sheet: "tablecells"
+        case .portal: "ipad.and.arrow.forward"
         case .scanner: "barcode.viewfinder"
         case .status: "checklist"
         case .teams: "chart.xyaxis.line"

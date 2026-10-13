@@ -1,11 +1,16 @@
 const { app, BrowserWindow, clipboard, dialog, ipcMain } = require("electron");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { startPortalServer } = require("./portal-server.js");
 
 let mainWindow;
 let autoUpdater;
 let updateCheckInProgress = false;
 let manualUpdateCheck = false;
+let portalServer;
+let portalStatus = { running: false, urls: [], port: 8324, acceptedCount: 0, lastSubmission: "" };
+const pendingPortalSubmissions = new Map();
 
 app.setName("FieldScout");
 if (process.platform === "win32") app.setAppUserModelId("org.mecorobotics.fieldscout");
@@ -70,6 +75,51 @@ async function createWindow() {
 
 function sendUpdateStatus(status) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("update:status", status);
+}
+
+function sendPortalStatus(update = {}) {
+  portalStatus = { ...portalStatus, ...update };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("portal:status", portalStatus);
+}
+
+function requestPortalSubmission(payload, submission) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return Promise.resolve({ statusCode: 503, status: "unavailable", message: "FieldScout is not ready yet." });
+  }
+  return new Promise((resolve) => {
+    const requestId = randomUUID();
+    const timer = setTimeout(() => {
+      pendingPortalSubmissions.delete(requestId);
+      resolve({ statusCode: 503, status: "unavailable", message: "FieldScout did not answer in time. The entry is still saved on the iPad." });
+    }, 10_000);
+    pendingPortalSubmissions.set(requestId, (result) => {
+      clearTimeout(timer);
+      if (result.accepted) {
+        sendPortalStatus({
+          acceptedCount: portalStatus.acceptedCount + 1,
+          lastSubmission: result.message || `Team ${submission.fields.tn}, match ${submission.fields.mn} added.`
+        });
+      } else if (result.message) {
+        sendPortalStatus({ lastSubmission: result.message });
+      }
+      resolve(result);
+    });
+    mainWindow.webContents.send("portal:submission", { requestId, payload, submissionId: submission.submissionId });
+  });
+}
+
+async function configureScoutingPortal() {
+  const pagePath = app.isPackaged
+    ? path.join(process.resourcesPath, "ScoutingPortal.html")
+    : path.join(__dirname, "..", "Shared", "ScoutingPortal.html");
+  try {
+    const started = await startPortalServer({ pagePath, onSubmission: requestPortalSubmission });
+    portalServer = started.server;
+    sendPortalStatus({ running: true, urls: started.urls, port: started.port, error: "" });
+  } catch (error) {
+    console.error("Could not start the iPad Portal:", error);
+    sendPortalStatus({ running: false, urls: [], error: `Could not start the iPad Portal: ${error.message}` });
+  }
 }
 
 async function checkForUpdates(userInitiated = false) {
@@ -184,6 +234,14 @@ ipcMain.handle("backup:restore", async (_event, name) => {
 });
 ipcMain.handle("clipboard:readText", () => clipboard.readText());
 ipcMain.handle("update:check", () => checkForUpdates(true));
+ipcMain.handle("portal:status", () => portalStatus);
+ipcMain.handle("portal:submission-result", (_event, requestId, result) => {
+  const complete = pendingPortalSubmissions.get(requestId);
+  if (!complete) return false;
+  pendingPortalSubmissions.delete(requestId);
+  complete(result);
+  return true;
+});
 
 ipcMain.handle("csv:import", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -213,10 +271,19 @@ ipcMain.handle("csv:export", async (_event, csvText, suggestedName) => {
 
 app.whenReady().then(async () => {
   await createWindow();
+  await configureScoutingPortal();
   configureAutomaticUpdates();
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow();
   });
+});
+
+app.on("before-quit", () => {
+  portalServer?.close();
+  for (const complete of pendingPortalSubmissions.values()) {
+    complete({ statusCode: 503, status: "unavailable", message: "FieldScout is closing. The entry is still saved on the iPad." });
+  }
+  pendingPortalSubmissions.clear();
 });
 
 app.on("window-all-closed", () => app.quit());

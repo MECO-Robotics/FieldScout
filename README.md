@@ -8,7 +8,8 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 
 - Editable spreadsheet with text, numeric, and checkbox cells
 - CSV and TSV import plus CSV export, including quoted commas and multiline notes
-- Scanner Intake screen for iPad-generated barcodes and keyboard-wedge scanners
+- App-free iPad Portal that sends one complete scouting entry directly into FieldScout over the event's local Wi-Fi
+- Optional Scanner Intake fallback for QRScout-generated barcodes and keyboard-wedge scanners
 - Keyboard-safe QRScout records plus JSON, `key=value`, CSV-row, and legacy tab-separated scan payloads
 - Exact raw scan preservation in the local document archive and duplicate-scan protection
 - Team-and-match conflict review with side-by-side values and replace/keep-both choices
@@ -25,7 +26,7 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 - Automatic local persistence in `Application Support/FieldScout/scouting-data.json`
 - Automatic app updates from signed GitHub Releases on installed macOS and Windows builds
 
-No account, server, or API key is required. Scouting, analytics, scanning, import/export, and backups work without internet and never upload scouting data. FieldScout only uses the internet to check GitHub Releases for app updates.
+No account, cloud server, or API key is required. Scouting, analytics, scanning, import/export, and backups work without internet and never upload scouting data. The iPad Portal stays entirely on the event's local network. FieldScout only uses the internet to check GitHub Releases for app updates.
 
 ## Download
 
@@ -43,7 +44,18 @@ Version 0.5.0 is the first updater-enabled release. Anyone running 0.4.0 or earl
 - Updates preserve the scouting document and local backups. macOS archives are verified with an Ed25519 signature; Windows installers are verified against the SHA-512 value in the generated update manifest.
 - GitHub Releases is only needed for update checks and downloads. If an event has no internet connection, FieldScout continues working normally and checks again later.
 
-## Use an iPad app and barcode scanner
+## Scout from an iPad without installing an app
+
+1. Connect the FieldScout computer and each iPad to the same Wi-Fi network. The network does not need internet access.
+2. Keep FieldScout open and choose **iPad Portal** in its sidebar.
+3. Type one of the displayed addresses into Safari on each iPad and bookmark it for the event.
+4. Fill out the scouting form and tap **Submit entry**. FieldScout validates all 29 named QRScout fields, adds exactly one spreadsheet row, leaves the original data unchanged, and refreshes rankings automatically.
+
+If the laptop disconnects, Safari keeps completed entries on that iPad and retries them every five seconds. Keep the page open or return to it when the computer is available; the queued entries move into FieldScout without rescanning or retyping. Exact duplicate submissions are ignored. A different entry for a team and match that already exists is kept on the iPad for scouting-lead review instead of silently replacing the row.
+
+The portal uses local TCP port `8324`. Allow FieldScout's local-network access if macOS asks. On Windows, allow FieldScout on **Private networks** if Windows Firewall asks. FieldScout must remain open, and guest Wi-Fi that blocks devices from reaching one another cannot carry the entries; a normal event router or team hotspot works.
+
+## Optional QRScout app and barcode scanner fallback
 
 1. Open **Scanner Intake** in FieldScout.
 2. Pair or plug in a barcode scanner configured as a keyboard. Sending Return after a scan is optional.
@@ -149,7 +161,7 @@ cd Windows
 npm test
 ```
 
-The macOS and Windows test suites cover the exact 29-field QRScout contract, keyboard-safe decoding, partial-scan rejection, legacy tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.
+The macOS and Windows test suites cover the exact 29-field QRScout contract, local iPad Portal HTTP submissions, cross-origin rejection, keyboard-safe decoding, partial-scan rejection, legacy tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.
 
 For a cross-repository verification using the real Objective-C QRScout generator, an actual rendered/decoded QR image, and both desktop intake engines, run:
 

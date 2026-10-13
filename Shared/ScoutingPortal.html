@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'">
+  <title>MECO Field Scout</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --navy:#07111f; --panel:#10233a; --line:#294766; --text:#f4f8ff; --muted:#a9bdd3; --blue:#2d91ff; --red:#ee334f; --green:#35d29a; --amber:#ffc15d; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:radial-gradient(circle at 15% -10%,#174c7c 0,transparent 35rem),var(--navy); }
+    header { position:sticky; top:0; z-index:5; padding:calc(14px + env(safe-area-inset-top)) 18px 14px; border-bottom:1px solid var(--line); background:rgba(7,17,31,.94); backdrop-filter:blur(18px); }
+    .brand { display:flex; align-items:center; justify-content:space-between; gap:12px; max-width:900px; margin:auto; }
+    h1 { margin:0; font-size:21px; }
+    h1 span { color:#75bbff; }
+    .sub { color:var(--muted); font-size:12px; margin-top:3px; }
+    .connection { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--amber); }
+    .connection.online .dot { background:var(--green); box-shadow:0 0 0 4px rgba(53,210,154,.12); }
+    main { max-width:900px; margin:auto; padding:18px 14px calc(110px + env(safe-area-inset-bottom)); }
+    .notice { padding:13px 14px; border:1px solid #2d567f; border-radius:13px; color:#d9eaff; background:rgba(21,62,101,.45); line-height:1.45; font-size:13px; }
+    .queue { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding:11px 13px; border:1px solid var(--line); border-radius:12px; background:rgba(16,35,58,.86); font-size:13px; }
+    .queue[hidden] { display:none; }
+    button { font:inherit; }
+    button.secondary { border:1px solid var(--line); border-radius:9px; padding:8px 11px; color:var(--text); background:#162d48; font-weight:700; }
+    fieldset { margin:15px 0 0; padding:15px; border:1px solid var(--line); border-radius:15px; background:linear-gradient(145deg,rgba(18,41,67,.98),rgba(10,25,42,.98)); box-shadow:0 15px 36px rgba(0,0,0,.18); }
+    legend { padding:0 8px; color:#77bcff; font-size:13px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    label.control { display:grid; gap:6px; color:#d7e6f5; font-size:13px; font-weight:700; }
+    label.control.full { grid-column:1/-1; }
+    input, select, textarea { width:100%; min-height:46px; border:1px solid var(--line); border-radius:10px; padding:10px 11px; color:var(--text); background:#071727; font:inherit; font-size:16px; outline:none; }
+    textarea { min-height:92px; resize:vertical; }
+    input:focus, select:focus, textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(45,145,255,.16); }
+    .choices { grid-column:1/-1; }
+    .choices-title { display:block; margin-bottom:8px; color:#d7e6f5; font-size:13px; font-weight:700; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .chip input { position:absolute; opacity:0; pointer-events:none; }
+    .chip span { display:block; padding:9px 11px; border:1px solid var(--line); border-radius:10px; color:#cfe1f3; background:#0a1b2d; font-size:13px; font-weight:700; }
+    .chip input:checked + span { border-color:#e94860; color:white; background:#b9233b; box-shadow:0 0 0 2px rgba(238,51,79,.14); }
+    .submit-bar { position:fixed; left:0; right:0; bottom:0; z-index:6; padding:12px max(14px,env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left)); border-top:1px solid var(--line); background:rgba(7,17,31,.94); backdrop-filter:blur(18px); }
+    .submit-inner { display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; max-width:872px; margin:auto; }
+    #status { color:var(--muted); font-size:12px; line-height:1.35; }
+    #status.success { color:var(--green); }
+    #status.error { color:#ff93a3; }
+    #submit { min-height:48px; border:0; border-radius:11px; padding:10px 18px; color:white; background:linear-gradient(135deg,#176fd5,#2d91ff); font-size:16px; font-weight:800; box-shadow:0 8px 24px rgba(45,145,255,.24); }
+    #submit:disabled { opacity:.55; }
+    .required { color:#ff8fa0; }
+    @media (max-width:620px) { .grid { grid-template-columns:1fr; } label.control.full,.choices { grid-column:auto; } .brand { align-items:flex-start; } .connection { padding:6px 8px; } fieldset { padding:13px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div><h1>MECO <span>Field Scout</span></h1><div class="sub">Team 8324 · direct to the scouting laptop</div></div>
+      <div id="connection" class="connection"><i class="dot"></i><span>Connecting…</span></div>
+    </div>
+  </header>
+  <main>
+    <div class="notice"><strong>No app or internet needed.</strong> Keep this page open on the event Wi‑Fi. Submit once; FieldScout adds exactly one spreadsheet entry. If the laptop disconnects, this iPad safely queues the entry and moves it when the connection returns.</div>
+    <div id="queue" class="queue" hidden><span id="queueText"></span><button id="retry" class="secondary" type="button">Retry now</button></div>
+    <form id="scoutForm">
+      <fieldset>
+        <legend>Prematch</legend>
+        <div class="grid">
+          <label class="control">Scouter initials <span class="required">required</span><input id="si" maxlength="12" autocomplete="name" autocapitalize="characters" required></label>
+          <label class="control">Match number <span class="required">required</span><input id="mn" type="number" min="1" inputmode="numeric" required></label>
+          <label class="control">Team number <span class="required">required</span><input id="tn" type="number" min="1" inputmode="numeric" required></label>
+          <label class="control">Starting position <span class="required">required</span><select id="sp" required><option value="">Choose position</option><option>Outpost Trench</option><option>Outpost Bump — Trench</option><option>Outpost Bump — Hub</option><option>Hub</option><option>Depot Bump — Hub</option><option>Depot Bump — Trench</option><option>Depot Trench</option></select></label>
+          <label class="control">No show<select id="ns"><option value="false">No</option><option value="true">Yes</option></select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Autonomous · 20 seconds</legend>
+        <div class="grid">
+          <label class="control">Auto fuel scored<input id="afs" type="number" min="0" max="500" inputmode="numeric" value="0"></label>
+          <label class="control">Robot stuck or stopped<select id="ast"><option value="false">No</option><option value="true">Yes</option></select></label>
+          <label class="control">Climbed in auto<select id="acl"><option value="No">No climb</option><option value="C">Climbed</option><option value="F">Failed climb</option></select></label>
+          <div class="choices"><span class="choices-title">Where collected fuel</span><div class="chips" data-multi="afc"><label class="chip"><input type="checkbox" value="Outpost"><span>Outpost</span></label><label class="chip"><input type="checkbox" value="Depot"><span>Depot</span></label><label class="chip"><input type="checkbox" value="Neutral Zone"><span>Neutral Zone</span></label><label class="chip"><input type="checkbox" value="Neutral Zone — 2nd Pass"><span>Neutral Zone · 2nd pass</span></label><label class="chip"><input type="checkbox" value="Did Not Move"><span>Did not move</span></label><label class="chip"><input type="checkbox" value="Moved Without Collecting"><span>Moved without collecting</span></label></div></div>
+          <div class="choices"><span class="choices-title">Other auto actions</span><div class="chips" data-multi="aaa"><label class="chip"><input type="checkbox" value="Passed"><span>Passed</span></label><label class="chip"><input type="checkbox" value="Bump"><span>Bump</span></label><label class="chip"><input type="checkbox" value="Trench"><span>Trench</span></label></div></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Teleop · 2:20</legend>
+        <div class="grid">
+          <label class="control">Teleop fuel scored<input id="tfs" type="number" min="0" max="500" inputmode="numeric" value="0"></label>
+          <label class="control">Defended by opponent<select id="dbo"><option value="false">No</option><option value="true">Yes</option></select></label>
+          <label class="control">Fuel fed · herded and passed<input id="ff" type="number" min="0" max="500" inputmode="numeric" value="0"></label>
+          <div class="choices"><span class="choices-title">Bump / trench</span><div class="chips" data-multi="bt"><label class="chip"><input type="checkbox" value="Bump"><span>Bump</span></label><label class="chip"><input type="checkbox" value="Trench"><span>Trench</span></label></div></div>
+          <div class="choices"><span class="choices-title">Opposing-zone actions</span><div class="chips" data-multi="oza"><label class="chip"><input type="checkbox" value="Collecting"><span>Collecting</span></label><label class="chip"><input type="checkbox" value="Defense"><span>Defense</span></label></div></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Endgame and robot health</legend>
+        <div class="grid">
+          <label class="control">Endgame climb<select id="ecl"><option value="No">No climb</option><option value="L1">Level 1</option><option value="L2">Level 2</option><option value="L3">Level 3</option><option value="F">Failed climb</option></select></label>
+          <label class="control">Mechanical issue<select id="mi"><option value="false">No</option><option value="true">Yes</option></select></label>
+          <label class="control">Robot died<select id="di"><option value="false">No</option><option value="true">Yes</option></select></label>
+          <label class="control">Tripped / fell over<select id="ti"><option value="false">No</option><option value="true">Yes</option></select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Postmatch ratings</legend>
+        <div class="grid">
+          <label class="control">Scoring effectiveness · 0–5<input id="se" type="number" min="0" max="5" inputmode="numeric" value="0"></label>
+          <label class="control">Scored how?<select id="sh"><option value="">Choose</option><option value="driving">While driving</option><option value="stationary">While stationary</option><option value="both">Both</option><option value="none">No scoring</option></select></label>
+          <label class="control">Feeding / passing skill · 0–5<input id="fps" type="number" min="0" max="5" inputmode="numeric" value="0"></label>
+          <label class="control">Passed how?<select id="ph"><option value="">Choose</option><option value="driving">While driving</option><option value="stationary">While stationary</option><option value="both">Both</option><option value="none">No passing</option></select></label>
+          <label class="control">Defense skill · 0–5<input id="ds" type="number" min="0" max="5" inputmode="numeric" value="0"></label>
+          <label class="control">Card<select id="ca"><option value="No Card">No card</option><option value="Yellow">Yellow card</option><option value="Red">Red card</option></select></label>
+          <label class="control">First pick · scoring<select id="fp"><option value="">Choose</option><option value="Yes">Yes</option><option value="May">Maybe</option><option value="No">No</option></select></label>
+          <label class="control">Second pick · passing / defense<select id="s2p"><option value="">Choose</option><option value="Yes">Yes</option><option value="May">Maybe</option><option value="No">No</option></select></label>
+          <div class="choices"><span class="choices-title">Scoring locations</span><div class="chips" data-multi="sl"><label class="chip"><input type="checkbox" value="Outpost Trench"><span>Outpost Trench</span></label><label class="chip"><input type="checkbox" value="Outpost"><span>Outpost</span></label><label class="chip"><input type="checkbox" value="Hub"><span>Hub</span></label><label class="chip"><input type="checkbox" value="Ladder"><span>Ladder</span></label><label class="chip"><input type="checkbox" value="Depot"><span>Depot</span></label><label class="chip"><input type="checkbox" value="Depot Trench"><span>Depot Trench</span></label></div></div>
+          <label class="control full">Comments<textarea id="co" maxlength="1000" placeholder="Short notes about this robot"></textarea></label>
+        </div>
+      </fieldset>
+    </form>
+  </main>
+
+  <div class="submit-bar"><div class="submit-inner"><div id="status" role="status">Ready to send directly to FieldScout.</div><button id="submit" form="scoutForm" type="submit">Submit entry</button></div></div>
+
+  <script>
+    (() => {
+      "use strict";
+      const identifiers = ["si","mn","tn","sp","ns","afs","afc","aaa","ast","acl","tfs","bt","dbo","ff","oza","ecl","mi","di","ti","se","sh","sl","fps","ph","ds","ca","fp","s2p","co"];
+      const queueKey = "meco-fieldscout-pending-v1";
+      const initialsKey = "meco-fieldscout-initials-v1";
+      const form = document.getElementById("scoutForm");
+      const submit = document.getElementById("submit");
+      const status = document.getElementById("status");
+      const connection = document.getElementById("connection");
+      const queueBox = document.getElementById("queue");
+      const queueText = document.getElementById("queueText");
+
+      function loadQueue() {
+        try { const value = JSON.parse(localStorage.getItem(queueKey) || "[]"); return Array.isArray(value) ? value : []; }
+        catch (_) { return []; }
+      }
+      function saveQueue(entries) { localStorage.setItem(queueKey, JSON.stringify(entries)); updateQueue(); }
+      function updateQueue() {
+        const entries = loadQueue();
+        queueBox.hidden = entries.length === 0;
+        if (!entries.length) return;
+        const blocked = entries.filter(entry => entry.blocked).length;
+        queueText.textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"} saved on this iPad${blocked ? ` · ${blocked} need review` : " · retrying automatically"}`;
+      }
+      function setStatus(message, kind = "") { status.textContent = message; status.className = kind; }
+      function setConnection(online) { connection.classList.toggle("online", online); connection.querySelector("span").textContent = online ? "FieldScout connected" : "Waiting for laptop"; }
+      function selectedMulti(identifier) { return [...document.querySelectorAll(`[data-multi="${identifier}"] input:checked`)].map(input => input.value).join(","); }
+      function collectFields() {
+        const fields = {};
+        for (const identifier of identifiers) {
+          const control = document.getElementById(identifier);
+          fields[identifier] = control ? String(control.value || "").trim() : selectedMulti(identifier);
+        }
+        return fields;
+      }
+      function resetForNext(fields) {
+        const nextMatch = /^\d+$/.test(fields.mn) ? String(Number(fields.mn) + 1) : "";
+        const initials = fields.si;
+        form.reset();
+        document.querySelectorAll("[data-multi] input").forEach(input => { input.checked = false; });
+        document.getElementById("si").value = initials;
+        document.getElementById("mn").value = nextMatch;
+        localStorage.setItem(initialsKey, initials);
+        document.getElementById("tn").focus();
+      }
+      function makeEntry(fields) {
+        return { submissionId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`, fields, createdAt: new Date().toISOString(), blocked: false };
+      }
+      async function transmit(entry) {
+        const response = await fetch("/api/entries", { method:"POST", headers:{"Content-Type":"application/json","X-FieldScout-Portal":"1"}, body:JSON.stringify({submissionId:entry.submissionId,fields:entry.fields}) });
+        const result = await response.json().catch(() => ({message:`FieldScout returned ${response.status}.`}));
+        if (!response.ok) { const error = new Error(result.message || "FieldScout rejected the entry."); error.conflict = response.status === 409; throw error; }
+        return result;
+      }
+      async function flushQueue(manual = false) {
+        let entries = loadQueue();
+        if (!entries.length) { updateQueue(); return; }
+        if (manual) entries = entries.map(entry => ({...entry,blocked:false}));
+        for (const entry of [...entries]) {
+          if (entry.blocked) continue;
+          try {
+            const result = await transmit(entry);
+            entries = entries.filter(candidate => candidate.submissionId !== entry.submissionId);
+            saveQueue(entries);
+            setConnection(true);
+            setStatus(result.message || "Queued entry transferred to FieldScout.", "success");
+          } catch (error) {
+            if (error.conflict) {
+              entries = entries.map(candidate => candidate.submissionId === entry.submissionId ? {...candidate,blocked:true,lastError:error.message} : candidate);
+              saveQueue(entries);
+              setStatus(`${error.message} The entry remains saved on this iPad.`, "error");
+              setConnection(true);
+              continue;
+            }
+            setConnection(false);
+            break;
+          }
+        }
+      }
+      async function checkConnection() {
+        try { const response = await fetch("/health", {cache:"no-store"}); setConnection(response.ok); if (response.ok) await flushQueue(); }
+        catch (_) { setConnection(false); }
+      }
+
+      form.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const fields = collectFields();
+        const entry = makeEntry(fields);
+        submit.disabled = true;
+        setStatus("Sending entry to FieldScout…");
+        try {
+          const result = await transmit(entry);
+          setConnection(true);
+          setStatus(result.message || `Team ${fields.tn}, match ${fields.mn} added.`, "success");
+          resetForNext(fields);
+        } catch (error) {
+          const entries = loadQueue();
+          entry.blocked = Boolean(error.conflict);
+          entry.lastError = error.message;
+          if (!entries.some(candidate => candidate.submissionId === entry.submissionId)) entries.push(entry);
+          saveQueue(entries);
+          setConnection(Boolean(error.conflict));
+          setStatus(error.conflict ? `${error.message} Saved on this iPad for review.` : "Laptop unavailable. Entry saved on this iPad and will transfer automatically.", error.conflict ? "error" : "success");
+          resetForNext(fields);
+        } finally { submit.disabled = false; }
+      });
+      document.getElementById("retry").addEventListener("click", () => flushQueue(true));
+      document.getElementById("si").value = localStorage.getItem(initialsKey) || "";
+      updateQueue();
+      checkConnection();
+      setInterval(checkConnection, 5000);
+      window.addEventListener("online", checkConnection);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) checkConnection(); });
+    })();
+  </script>
+</body>
+</html>

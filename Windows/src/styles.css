@@ -171,6 +171,22 @@ textarea { width: 100%; resize: vertical; padding: 13px; line-height: 1.55; font
 .format-grid code { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--blue-2); font-size: 11px; white-space: nowrap; }
 .format-grid span { color: var(--muted); font-size: 12px; line-height: 1.4; }
 
+.portal-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+.portal-card { padding: 20px; }
+.portal-card h3 { margin: 0 0 10px; font-size: 17px; }
+.portal-card > p { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.portal-urls { display: grid; gap: 8px; margin: 16px 0; }
+.portal-url { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #31577e; border-radius: 10px; background: #071727; }
+.portal-url code { overflow: hidden; color: #8ac7ff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.portal-url button { padding: 6px 9px; }
+.portal-note { padding-top: 4px; }
+.portal-steps { display: grid; gap: 12px; margin: 15px 0 20px; padding-left: 22px; color: #d9e8f8; font-size: 13px; line-height: 1.5; }
+.portal-stats { display: grid; grid-template-columns: 130px 1fr; gap: 10px; }
+.portal-stats div { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #091727; }
+.portal-stats span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.portal-stats strong { display: block; margin-top: 6px; color: var(--text); font-size: 15px; line-height: 1.35; }
+.portal-safety { margin-top: 14px; padding: 16px 18px; color: #cfe7df; background: linear-gradient(145deg, rgba(23, 77, 63, .64), rgba(11, 39, 38, .9)); border-color: #2b715b; font-size: 13px; }
+
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stat-card { padding: 16px; }
 .stat-card span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -225,4 +241,5 @@ textarea { width: 100%; resize: vertical; padding: 13px; line-height: 1.55; font
   .workspace { height: calc(100vh - 126px); grid-template-columns: minmax(0, 1fr) 290px; }
   .format-grid { grid-template-columns: 1fr; }
   .status-grid { grid-template-columns: 1fr; }
+  .portal-layout { grid-template-columns: 1fr; }
 }

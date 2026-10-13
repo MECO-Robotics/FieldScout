@@ -18,6 +18,7 @@
       </div>
       <nav aria-label="Main navigation">
         <button class="nav-button active" data-view="sheet">Spreadsheet</button>
+        <button class="nav-button" data-view="portal">iPad Portal</button>
         <button class="nav-button" data-view="scanner">Scanner Intake</button>
         <button class="nav-button" data-view="status">Event Status</button>
         <button class="nav-button" data-view="charts">Team Charts</button>
@@ -77,6 +78,34 @@
               <div id="backup-list"></div>
             </article>
           </div>
+        </section>
+
+        <section id="portal-view" class="view" aria-labelledby="portal-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">No iPad app or internet required</p>
+              <h2 id="portal-heading">iPad Scouting Portal</h2>
+            </div>
+            <span id="portal-state" class="pill">Starting…</span>
+          </div>
+          <div class="portal-layout">
+            <article class="card portal-card">
+              <h3>Open this on every iPad</h3>
+              <p>Connect the laptop and iPads to the same Wi‑Fi network, then type one of these addresses into Safari. Completed entries move directly into this spreadsheet.</p>
+              <div id="portal-urls" class="portal-urls"></div>
+              <p class="portal-note">The event network does not need internet access. Keep FieldScout open while the scouts work.</p>
+            </article>
+            <article class="card portal-card">
+              <h3>Event workflow</h3>
+              <ol class="portal-steps">
+                <li>Open the address once in Safari on each iPad.</li>
+                <li>Fill out the field form and tap <strong>Submit entry</strong>.</li>
+                <li>FieldScout adds one row and refreshes rankings automatically.</li>
+              </ol>
+              <div class="portal-stats"><div><span>Received this session</span><strong id="portal-count">0</strong></div><div><span>Last activity</span><strong id="portal-last">Waiting for the first iPad</strong></div></div>
+            </article>
+          </div>
+          <div class="card portal-safety"><strong>Connection drops are safe.</strong> The Safari page stores unfinished transfers on that iPad and retries automatically when this laptop returns.</div>
         </section>
 
         <section id="scanner-view" class="view" aria-labelledby="scanner-heading">

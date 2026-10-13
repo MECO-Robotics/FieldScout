@@ -4,10 +4,14 @@ import SwiftUI
 
 @main
 struct FieldScoutApp: App {
-    @StateObject private var store = SpreadsheetStore()
+    @StateObject private var store: SpreadsheetStore
+    @StateObject private var portal: LocalScoutingServer
     private let updaterController: SPUStandardUpdaterController
 
     init() {
+        let store = SpreadsheetStore()
+        _store = StateObject(wrappedValue: store)
+        _portal = StateObject(wrappedValue: LocalScoutingServer(store: store))
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
@@ -23,7 +27,9 @@ struct FieldScoutApp: App {
         WindowGroup("FieldScout") {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(portal)
                 .frame(minWidth: 1_100, minHeight: 700)
+                .task { portal.start() }
         }
         .commands {
             CommandGroup(after: .appInfo) {

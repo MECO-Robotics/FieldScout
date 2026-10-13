@@ -17,9 +17,11 @@
     lastMutationKey: null,
     lastMutationAt: 0,
     pendingConflict: null,
-    backups: []
+    backups: [],
+    portalStatus: { running: false, urls: [], port: 8324, acceptedCount: 0, lastSubmission: "" }
   };
   let scannerIdleTimer = null;
+  let portalSubmissionChain = Promise.resolve();
 
   const byId = (id) => document.getElementById(id);
 
@@ -524,6 +526,82 @@
     updateCounts();
     updateHistoryButtons();
     if (state.view === "status") renderStatus();
+    if (state.view === "portal") renderPortal();
+  }
+
+  function renderPortal() {
+    const status = state.portalStatus;
+    const badge = byId("portal-state");
+    badge.textContent = status.running ? `Available on port ${status.port}` : "Not available";
+    badge.style.color = status.running ? "#77e0ba" : "#ff8999";
+    byId("portal-count").textContent = String(status.acceptedCount || 0);
+    byId("portal-last").textContent = status.error || status.lastSubmission || "Waiting for the first iPad";
+    const urls = byId("portal-urls");
+    urls.replaceChildren();
+    if (!status.running || !status.urls?.length) {
+      urls.append(element("p", "status-empty", status.error || "No local network address is available. Connect this computer to the scouting Wi‑Fi."));
+      return;
+    }
+    status.urls.forEach((url) => {
+      const row = element("div", "portal-url");
+      row.append(element("code", "", url));
+      const copy = element("button", "secondary", "Copy");
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          copy.textContent = "Copied";
+          window.setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+        } catch (error) {
+          showSaveStatus(`Could not copy address: ${error.message}`, true);
+        }
+      });
+      row.append(copy);
+      urls.append(row);
+    });
+  }
+
+  function updatePortalStatus(status) {
+    state.portalStatus = { ...state.portalStatus, ...status };
+    if (state.view === "portal") renderPortal();
+  }
+
+  async function handlePortalSubmission(request) {
+    try {
+      const previousDocument = snapshotDocument();
+      const result = core.ingestScan(state.document, request.payload);
+      if (result.conflict) {
+        await desktop.completePortalSubmission(request.requestId, {
+          statusCode: 409,
+          status: "conflict",
+          accepted: false,
+          message: `Team ${result.conflict.teamNumber}, match ${result.conflict.matchNumber} already has different data. Ask the scouting lead to review it in FieldScout.`
+        });
+        return;
+      }
+      state.document = result.document;
+      if (result.accepted) {
+        state.undoStack.push(previousDocument);
+        if (state.undoStack.length > 50) state.undoStack.shift();
+        state.redoStack = [];
+        state.acceptedScans += 1;
+        await desktop.saveDocument(state.document, false);
+        renderAll();
+        showSaveStatus("iPad entry stored locally");
+      }
+      await desktop.completePortalSubmission(request.requestId, {
+        statusCode: 200,
+        status: result.accepted ? "accepted" : "duplicate",
+        accepted: result.accepted,
+        message: result.accepted ? result.message : (result.message || "This entry was already in FieldScout.")
+      });
+    } catch (error) {
+      await desktop.completePortalSubmission(request.requestId, {
+        statusCode: 422,
+        status: "invalid",
+        accepted: false,
+        message: error.message || "FieldScout could not add this iPad entry."
+      });
+    }
   }
 
   function switchView(view) {
@@ -531,6 +609,7 @@
     document.querySelectorAll(".view").forEach((section) => section.classList.toggle("active", section.id === `${view}-view`));
     document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
     if (view === "scanner") window.setTimeout(() => byId("scanner-input").focus(), 30);
+    if (view === "portal") renderPortal();
     if (view === "status") renderStatus();
     if (view === "charts") renderCharts();
   }
@@ -754,11 +833,20 @@
   async function initialize() {
     bindEvents();
     desktop.onUpdateStatus(showUpdateStatus);
+    desktop.onPortalStatus(updatePortalStatus);
+    desktop.onPortalSubmission((request) => {
+      portalSubmissionChain = portalSubmissionChain.then(() => handlePortalSubmission(request));
+    });
     try {
       state.document = core.normalizeDocument(await desktop.loadDocument());
     } catch (error) {
       state.document = core.createDocument();
       showSaveStatus(`Using a new local sheet: ${error.message}`, true);
+    }
+    try {
+      updatePortalStatus(await desktop.getPortalStatus());
+    } catch (error) {
+      updatePortalStatus({ running: false, error: `Could not read iPad Portal status: ${error.message}` });
     }
     renderAll();
   }
