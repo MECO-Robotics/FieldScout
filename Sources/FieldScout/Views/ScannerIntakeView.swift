@@ -68,7 +68,7 @@ struct ScannerIntakeView: View {
                     .font(.headline)
                 FormatExample(label: "Named fields", example: "team=254;match=12;autoPoints=18;brokeDown=no")
                 FormatExample(label: "JSON", example: "{\"Team\":254,\"Match\":12,\"Broke Down\":false}")
-                FormatExample(label: "QRScout", example: "QRSCOUT1-… (keyboard-safe encoded record)")
+                FormatExample(label: "QRScout", example: "QRSCOUT2-… (verified named-field record)")
                 FormatExample(label: "Generic CSV", example: "Alex,12,254,Red,18,42,6,0,3,No,Fast cycles")
                 Text("The exact barcode is kept in the offline scan archive for duplicate protection without adding another spreadsheet column.")
                     .font(.caption)

@@ -57,7 +57,7 @@ test("scanner normalizes printable tab aliases", () => {
   assert.equal(result.document.rows[0].values["qr-28"], "28");
 });
 
-test("scanner decodes the keyboard-safe QRScout envelope", () => {
+test("scanner decodes the legacy keyboard-safe QRScout envelope", () => {
   const fields = Array.from({ length: 29 }, (_value, index) => `field ${index} — value`);
   const encoded = Buffer.from(fields.join("\t"), "utf8").toString("base64url");
   const payload = `QRSCOUT1-${encoded}`;
@@ -68,6 +68,24 @@ test("scanner decodes the keyboard-safe QRScout envelope", () => {
   assert.equal(result.document.rows[0].values["qr-0"], fields[0]);
   assert.equal(result.document.rows[0].values["qr-28"], fields[28]);
   assert.equal(core.isCompleteAutomaticScan(payload), true);
+});
+
+test("version two scanner envelope maps named fields to exact columns", () => {
+  const fields = Array.from({ length: 29 }, (_value, index) => `field ${index} — value`);
+  const entries = core.QRSCOUT_FIELD_IDENTIFIERS.map((identifier, index) => [identifier, fields[index]]).reverse();
+  const encoded = Buffer.from(JSON.stringify({ v: 2, fields: Object.fromEntries(entries) }), "utf8").toString("base64url");
+  const payload = `QRSCOUT2-${encoded}`;
+
+  const result = core.ingestScan(core.createDocument(), payload);
+
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.document.columns.map((column) => result.document.rows[0].values[column.id]), fields);
+  assert.equal(core.isCompleteAutomaticScan(payload), true);
+});
+
+test("version two scanner envelope rejects a missing field", () => {
+  const encoded = Buffer.from(JSON.stringify({ v: 2, fields: { teamNumber: "8324" } }), "utf8").toString("base64url");
+  assert.throws(() => core.ingestScan(core.createDocument(), `QRSCOUT2-${encoded}`), /incomplete or damaged/);
 });
 
 test("partial legacy scans wait for the remaining fields", () => {
@@ -172,6 +190,35 @@ test("CSV import and export preserve quoted commas and multiline comments", () =
   const exported = core.exportCSV(document);
   const reimported = core.importCSV(exported, "event");
   assert.equal(reimported.rows[0].values["qr-28"], "fast, stable\nsecond line");
+});
+
+test("TSV import maps a reordered QRScout header into canonical columns", () => {
+  const values = Array.from({ length: 29 }, (_value, index) => `value-${index}`);
+  values[1] = "44";
+  values[2] = "8324";
+  const order = [28, ...Array.from({ length: 28 }, (_value, index) => index)];
+  const tsv = `${order.map((index) => core.HEADER_NAMES[index]).join("\t")}\n${order.map((index) => values[index]).join("\t")}\n`;
+
+  const document = core.importCSV(tsv, "QRScout import");
+
+  assert.deepEqual(document.columns.map((column) => column.name), core.HEADER_NAMES);
+  assert.equal(document.rows[0].values["qr-0"], "value-0");
+  assert.equal(document.rows[0].values["qr-1"], "44");
+  assert.equal(document.rows[0].values["qr-2"], "8324");
+  assert.equal(document.rows[0].values["qr-28"], "value-28");
+});
+
+test("headerless QRScout TSV is imported as one data row", () => {
+  const values = Array.from({ length: 29 }, (_value, index) => `field-${index}`);
+  values[1] = "7";
+  values[2] = "254";
+
+  const document = core.importCSV(`${values.join("\t")}\n`, "QRScout row");
+
+  assert.deepEqual(document.columns.map((column) => column.name), core.HEADER_NAMES);
+  assert.equal(document.rows.length, 1);
+  assert.equal(document.rows[0].values["qr-2"], "254");
+  assert.equal(document.rows[0].values["qr-28"], "field-28");
 });
 
 test("CSV export omits the automatic blank scanner row", () => {

@@ -7,7 +7,7 @@ The app icon is built around Team 8324 MECO Robotics' blue-and-red rocket identi
 ## What works in this MVP
 
 - Editable spreadsheet with text, numeric, and checkbox cells
-- CSV import and export, including quoted commas and multiline notes
+- CSV and TSV import plus CSV export, including quoted commas and multiline notes
 - Scanner Intake screen for iPad-generated barcodes and keyboard-wedge scanners
 - Keyboard-safe QRScout records plus JSON, `key=value`, CSV-row, and legacy tab-separated scan payloads
 - Exact raw scan preservation in the local document archive and duplicate-scan protection
@@ -50,7 +50,7 @@ Version 0.5.0 is the first updater-enabled release. Anyone running 0.4.0 or earl
 3. Show the scouting barcode on the iPad and scan it.
 4. FieldScout appends the 29 QRScout values as one row, leaves a fresh blank row ready for the next scan, archives the original barcode outside the visible grid, and refreshes rankings immediately.
 
-FieldScout imports a complete barcode automatically after the scanner pauses, splits its values into separate columns, and then returns focus for the next scan. The scanner does not need to send Return or start a new line. Current QRScout versions wrap all 29 values in a keyboard-safe `QRSCOUT1-` record, preventing field separators from moving focus and preventing a partial scan from becoming a second row. A packed barcode accidentally scanned into a blank spreadsheet cell is also detected and distributed across that row. Older QRScout barcodes remain supported: literal tabs and common printable scanner aliases such as `<TAB>`, `\t`, and `⇥` are accepted, but FieldScout waits for all 29 fields before importing automatically. Exact duplicate payloads are ignored. Starting positions, collection locations, scoring locations, and multi-select actions are stored using the full names shown to the scout; older QRScout codes are expanded automatically. Named payloads can still introduce new fields without losing them, and generic positional CSV or tab-separated payloads remain supported through Return or **Add Scan**.
+FieldScout imports a complete barcode automatically after the scanner pauses, splits its values into separate columns, and then returns focus for the next scan. The scanner does not need to send Return or start a new line. Current QRScout versions use a keyboard-safe `QRSCOUT2-` record in which all 29 values carry stable field identities. This prevents Tab keys from moving focus, prevents a partial scan from becoming a second row, and keeps duplicate labels such as the AUTO and TELEOP **Fuel Scored** columns distinct. An incomplete or malformed QRSCOUT2 record is rejected instead of being guessed into cells. A packed barcode accidentally scanned into a blank spreadsheet cell is also detected and distributed across that row. Older QRSCOUT1 and tab-based barcodes remain supported. Exact duplicate payloads are ignored. Starting positions, collection locations, scoring locations, and multi-select actions are stored using the full names shown to the scout; older QRScout codes are expanded automatically.
 
 If a different barcode has the same team and match as an existing row, FieldScout pauses and shows the changed values side by side. Choose **Replace Existing**, **Keep Both**, or cancel without changing the sheet.
 
@@ -120,12 +120,12 @@ For a release, update `CFBundleShortVersionString` in `Resources/Info.plist` and
 
 ## Import existing scouting data
 
-1. Export the field-scouting app's data as UTF-8 CSV.
+1. Export the field-scouting app's data as UTF-8 CSV or tab-separated text.
 2. In the Scouting Sheet toolbar, choose **Import**.
 3. Click a column header to check its **Analytics role**.
 4. Map the team, match, scoring, defense, and breakdown columns as needed.
 
-FieldScout guesses common header names such as `Team Number`, `Auto Points`, `Teleop Points`, `Defense Rating`, and `Robot Broke Down?`. Unknown columns remain untouched and can be mapped manually.
+For a QRScout file, FieldScout recognizes comma-, tab-, or semicolon-separated data, restores the canonical 29 columns even when the header is reordered, and accepts a headerless 29-value row when match and team numbers are present. This includes corrected spellings such as `Defended`, `Tripped`, `Effectiveness`, and `Yellow`. Other files keep their original columns; FieldScout guesses common analytics headers such as `Team Number`, `Auto Points`, `Teleop Points`, `Defense Rating`, and `Robot Broke Down?`.
 
 Import currently replaces the open sheet. Export first if the current sheet needs to be retained.
 
@@ -150,3 +150,9 @@ npm test
 ```
 
 The macOS and Windows test suites cover the exact 29-field QRScout contract, keyboard-safe decoding, partial-scan rejection, legacy tab payload detection, 2026 climb scoring, QRScout breakdown mapping, aggregation immutability, projected EPA shrinkage, CSV quoting, header-role inference, exact duplicates, team-match conflicts, data-quality coverage, and offline analyst responses.
+
+For a cross-repository verification using the real Objective-C QRScout generator, an actual rendered/decoded QR image, and both desktop intake engines, run:
+
+```sh
+./Scripts/verify-qrscout-e2e.sh
+```

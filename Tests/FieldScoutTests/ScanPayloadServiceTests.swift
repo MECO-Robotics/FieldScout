@@ -40,17 +40,44 @@ final class ScanPayloadServiceTests: XCTestCase {
         )
     }
 
-    func testParsesKeyboardSafeQRScoutEnvelope() throws {
+    func testParsesLegacyKeyboardSafeQRScoutEnvelope() throws {
         let values = (0..<QRScoutSchema.fieldCount).map { "field \($0) — value" }
         let tabPayload = values.joined(separator: "\t")
         let base64URL = Data(tabPayload.utf8).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
-        let payload = ScanPayloadService.qrScoutEnvelopePrefix + base64URL
+        let payload = ScanPayloadService.legacyQRScoutEnvelopePrefix + base64URL
 
         XCTAssertEqual(try ScanPayloadService.parse(payload), .qrScoutLegacy(values))
         XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(payload))
+    }
+
+    func testVersionTwoEnvelopeUsesStableFieldIdentitiesInsteadOfDictionaryOrder() throws {
+        let expected = (0..<QRScoutSchema.fieldCount).map { "field \($0) — value" }
+        var fields: [String: String] = [:]
+        for index in QRScoutSchema.fieldIdentifiers.indices.reversed() {
+            fields[QRScoutSchema.fieldIdentifiers[index]] = expected[index]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["v": 2, "fields": fields])
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let payload = ScanPayloadService.qrScoutEnvelopePrefix + encoded
+
+        XCTAssertEqual(try ScanPayloadService.parse(payload), .qrScoutLegacy(expected))
+        XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(payload))
+    }
+
+    func testVersionTwoEnvelopeRejectsMissingFieldsInsteadOfShiftingColumns() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["v": 2, "fields": ["teamNumber": "8324"]])
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+
+        XCTAssertThrowsError(try ScanPayloadService.parse(ScanPayloadService.qrScoutEnvelopePrefix + encoded))
     }
 
     func testPartialLegacyScanDoesNotAutoCommit() {

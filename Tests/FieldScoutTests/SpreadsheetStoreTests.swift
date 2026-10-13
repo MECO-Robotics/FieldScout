@@ -81,8 +81,9 @@ final class SpreadsheetStoreTests: XCTestCase {
         fields[2] = "8324"
         fields[3] = "Outpost Bump — Trench"
         fields[28] = "Fast and reliable"
-        let tabPayload = fields.joined(separator: "\t")
-        let base64URL = Data(tabPayload.utf8).base64EncodedString()
+        let namedFields = Dictionary(uniqueKeysWithValues: zip(QRScoutSchema.fieldIdentifiers, fields))
+        let data = try JSONSerialization.data(withJSONObject: ["v": 2, "fields": namedFields])
+        let base64URL = data.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
@@ -97,6 +98,25 @@ final class SpreadsheetStoreTests: XCTestCase {
         XCTAssertEqual(store.document.rows[0].values[store.document.columns[3].id], "Outpost Bump — Trench")
         XCTAssertEqual(store.document.rows[0].values[store.document.columns[28].id], "Fast and reliable")
         XCTAssertTrue(store.document.rows[1].values.values.allSatisfy(\.isEmpty))
+    }
+
+    func testPayloadProducedByExternalQRScoutGeneratorWhenProvided() throws {
+        guard let payload = ProcessInfo.processInfo.environment["QRSCOUT_CONTRACT_PAYLOAD"] else { return }
+        let expected = [
+            "AJ", "12", "8324", "Outpost Trench", "false", "500", "Outpost, Neutral Zone", "Passed, Bump", "true", "C",
+            "450", "Bump, Trench", "true", "300", "Collecting, Defense", "L3", "true", "false", "true",
+            "5", "both", "Outpost Trench, Hub", "4", "stationary", "5", "Yellow", "Yes", "May", "solid"
+        ]
+        let store = makeStore()
+
+        guard case .accepted = try store.ingestScan(payload) else {
+            return XCTFail("The real QRScout generator payload should be accepted")
+        }
+
+        XCTAssertEqual(store.meaningfulRowCount, 1)
+        XCTAssertEqual(store.document.rows.count, 2)
+        let actual = store.document.columns.map { store.document.rows[0].values[$0.id] ?? "" }
+        XCTAssertEqual(actual, expected)
     }
 
     func testExistingNumericLocationsAreMigratedAndBlankRowIsRestoredOnLaunch() throws {

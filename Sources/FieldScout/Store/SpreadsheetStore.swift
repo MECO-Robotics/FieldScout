@@ -413,7 +413,7 @@ final class SpreadsheetStore: ObservableObject {
 
     func importCSV() {
         let panel = NSOpenPanel()
-        panel.title = "Import scouting CSV"
+        panel.title = "Import scouting data"
         panel.allowedContentTypes = [.commaSeparatedText, .text]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }

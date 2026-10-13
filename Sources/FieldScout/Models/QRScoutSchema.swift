@@ -4,6 +4,14 @@ import Foundation
 /// Header spellings and order intentionally match PayloadBuilder.m in the iPad app.
 enum QRScoutSchema {
     static let fieldCount = 29
+    /// Stable machine-readable identities for every QRScout field. These are kept
+    /// separate from the visible headers so duplicate labels such as "Fuel Scored"
+    /// and "Climbed" can never be confused by a scanner or import.
+    static let fieldIdentifiers = [
+        "si", "mn", "tn", "sp", "ns", "afs", "afc", "aaa", "ast", "acl",
+        "tfs", "bt", "dbo", "ff", "oza", "ecl", "mi", "di", "ti", "se",
+        "sh", "sl", "fps", "ph", "ds", "ca", "fp", "s2p", "co"
+    ]
     private static let scoutFacingValues: [String: [String: String]] = [
         "startingposition": [
             "OT": "Outpost Trench",
@@ -98,6 +106,40 @@ enum QRScoutSchema {
 
     static var headerNames: [String] {
         columns().map(\.name)
+    }
+
+    static func orderedValues(from fieldsByIdentifier: [String: String]) -> [String]? {
+        guard Set(fieldsByIdentifier.keys) == Set(fieldIdentifiers) else { return nil }
+        return fieldIdentifiers.map { fieldsByIdentifier[$0] ?? "" }
+    }
+
+    /// Returns the input column index for each canonical QRScout column. Matching
+    /// includes duplicate-header occurrence numbers, so the two Fuel Scored and
+    /// Climbed columns remain distinct.
+    static func importOrder(for header: [String]) -> [Int]? {
+        guard header.count == fieldCount else { return nil }
+        let expected = headerIdentityKeys(headerNames)
+        let incoming = headerIdentityKeys(header)
+        guard Set(incoming) == Set(expected), incoming.count == Set(incoming).count else { return nil }
+        return expected.compactMap { incoming.firstIndex(of: $0) }
+    }
+
+    private static func headerIdentityKeys(_ names: [String]) -> [String] {
+        var occurrences: [String: Int] = [:]
+        return names.map { name in
+            var token = normalized(name)
+            let aliases = [
+                "scout": "scouterinitials", "scouter": "scouterinitials",
+                "match": "matchnumber", "team": "teamnumber",
+                "defendedbyopponent": "deffendedbyopponent",
+                "trippedfellover": "tripedfellover",
+                "scoringeffectiveness": "scoringefectiveness",
+                "yellowredcard": "yelloredcard"
+            ]
+            token = aliases[token] ?? token
+            occurrences[token, default: 0] += 1
+            return "\(token)#\(occurrences[token]!)"
+        }
     }
 
     static func matchesHeader(_ columns: [SheetColumn]) -> Bool {

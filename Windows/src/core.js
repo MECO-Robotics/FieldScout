@@ -38,7 +38,13 @@
   ];
 
   const HEADER_NAMES = QRSCOUT_FIELDS.map((field) => field[0]);
-  const QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT1-";
+  const QRSCOUT_FIELD_IDENTIFIERS = [
+    "si", "mn", "tn", "sp", "ns", "afs", "afc", "aaa", "ast", "acl",
+    "tfs", "bt", "dbo", "ff", "oza", "ecl", "mi", "di", "ti", "se",
+    "sh", "sl", "fps", "ph", "ds", "ca", "fp", "s2p", "co"
+  ];
+  const QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT2-";
+  const LEGACY_QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT1-";
   const SCOUT_FACING_VALUES = {
     startingposition: {
       OT: "Outpost Trench",
@@ -154,15 +160,55 @@
     return names.length === HEADER_NAMES.length && names.every((name, index) => name === HEADER_NAMES[index]);
   }
 
+  function qrScoutImportOrder(names) {
+    if (names.length !== HEADER_NAMES.length) return null;
+    const aliases = {
+      scout: "scouterinitials", scouter: "scouterinitials",
+      match: "matchnumber", team: "teamnumber",
+      defendedbyopponent: "deffendedbyopponent",
+      trippedfellover: "tripedfellover",
+      scoringeffectiveness: "scoringefectiveness",
+      yellowredcard: "yelloredcard"
+    };
+    const identityKeys = (headers) => {
+      const occurrences = new Map();
+      return headers.map((header) => {
+        const raw = compactName(header);
+        const token = aliases[raw] || raw;
+        const occurrence = (occurrences.get(token) || 0) + 1;
+        occurrences.set(token, occurrence);
+        return `${token}#${occurrence}`;
+      });
+    };
+    const expected = identityKeys(HEADER_NAMES);
+    const incoming = identityKeys(names);
+    if (new Set(incoming).size !== incoming.length) return null;
+    const order = expected.map((key) => incoming.indexOf(key));
+    return order.every((index) => index >= 0) ? order : null;
+  }
+
   function parseCSV(text) {
+    const cleaned = String(text).replace(/^\uFEFF/, "");
+    const firstRecord = cleaned.split(/\n/, 1)[0] || "";
+    const counts = [[",", 0], ["\t", 0], [";", 0]];
+    let inHeaderQuotes = false;
+    for (const character of firstRecord) {
+      if (character === '"') inHeaderQuotes = !inHeaderQuotes;
+      else if (!inHeaderQuotes) {
+        const candidate = counts.find(([delimiter]) => delimiter === character);
+        if (candidate) candidate[1] += 1;
+      }
+    }
+    counts.sort((left, right) => right[1] - left[1]);
+    const delimiter = counts[0][1] > 0 ? counts[0][0] : ",";
     const rows = [];
     let row = [];
     let field = "";
     let inQuotes = false;
-    for (let index = 0; index < text.length; index += 1) {
-      const character = text[index];
+    for (let index = 0; index < cleaned.length; index += 1) {
+      const character = cleaned[index];
       if (inQuotes) {
-        if (character === '"' && text[index + 1] === '"') {
+        if (character === '"' && cleaned[index + 1] === '"') {
           field += '"';
           index += 1;
         } else if (character === '"') {
@@ -172,7 +218,7 @@
         }
       } else if (character === '"') {
         inQuotes = true;
-      } else if (character === ",") {
+      } else if (character === delimiter) {
         row.push(field);
         field = "";
       } else if (character === "\n") {
@@ -237,9 +283,14 @@
 
   function importCSV(text, title = "Imported Scouting") {
     const records = parseCSV(text);
-    if (!records.length || !records[0].length) throw new Error("The CSV file has no header row.");
+    if (!records.length || !records[0].length) throw new Error("The file has no scouting data.");
     const header = records[0];
-    const columns = isExactQRScoutHeader(header)
+    const importOrder = qrScoutImportOrder(header);
+    const headerless = header.length === QRSCOUT_FIELDS.length
+      && /^\d+$/.test(String(header[1]).trim())
+      && /^\d+$/.test(String(header[2]).trim());
+    const canonicalOrder = importOrder || (headerless ? Array.from({ length: QRSCOUT_FIELDS.length }, (_value, index) => index) : null);
+    const columns = canonicalOrder
       ? qrScoutColumns()
       : header.map((name, index) => ({
           id: id(`column-${index}`),
@@ -247,12 +298,21 @@
           type: inferType(name, records.slice(1).map((record) => record[index] || "")),
           role: inferRole(name)
         }));
-    const rows = records.slice(1)
+    const dataRecords = headerless ? records : records.slice(1);
+    const rows = dataRecords
       .filter((record) => record.some((value) => String(value).trim()))
-      .map((record) => ({
-        id: id("row"),
-        values: Object.fromEntries(columns.map((column, index) => [column.id, record[index] || ""]))
-      }));
+      .map((record) => {
+        const sourceValues = canonicalOrder
+          ? canonicalOrder.map((sourceIndex) => record[sourceIndex] || "")
+          : columns.map((_column, index) => record[index] || "");
+        const values = Object.fromEntries(columns.map((column, index) => [column.id, sourceValues[index]]));
+        if (canonicalOrder) {
+          for (const index of [3, 6, 7, 11, 14, 21]) {
+            values[`qr-${index}`] = expandedScoutFacingValue(values[`qr-${index}`], HEADER_NAMES[index]);
+          }
+        }
+        return { id: id("row"), values };
+      });
     return {
       version: 1,
       title,
@@ -289,12 +349,38 @@
         base64 += "=".repeat((4 - (base64.length % 4)) % 4);
         const binary = globalThis.atob(base64);
         const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        if (envelope?.v !== 2 || !envelope.fields || typeof envelope.fields !== "object" || Array.isArray(envelope.fields)) {
+          throw new Error("wrong envelope");
+        }
+        const actualIdentifiers = Object.keys(envelope.fields).sort();
+        const expectedIdentifiers = [...QRSCOUT_FIELD_IDENTIFIERS].sort();
+        if (JSON.stringify(actualIdentifiers) !== JSON.stringify(expectedIdentifiers)) throw new Error("wrong fields");
+        const fields = QRSCOUT_FIELD_IDENTIFIERS.map((identifier) => String(envelope.fields[identifier] ?? ""));
+        return { kind: "qrScout", fields };
+      } catch (_error) {
+        throw new Error("This QRScout barcode is incomplete or damaged. Scan it again.");
+      }
+    }
+
+    if (preserved.startsWith(LEGACY_QRSCOUT_ENVELOPE_PREFIX)) {
+      try {
+        let base64 = preserved.slice(LEGACY_QRSCOUT_ENVELOPE_PREFIX.length)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+        base64 += "=".repeat((4 - (base64.length % 4)) % 4);
+        const binary = globalThis.atob(base64);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         const fields = new TextDecoder().decode(bytes).split("\t");
         if (fields.length !== QRSCOUT_FIELDS.length) throw new Error("wrong field count");
         return { kind: "qrScout", fields };
       } catch (_error) {
         throw new Error("This QRScout barcode is incomplete or damaged. Scan it again.");
       }
+    }
+
+    if (preserved.startsWith("QRSCOUT")) {
+      throw new Error("This QRScout barcode is incomplete, damaged, or from an unsupported version. Scan it again.");
     }
 
     if (preserved.trimStart().startsWith("{")) {
@@ -681,6 +767,7 @@
 
   return {
     QRSCOUT_FIELDS,
+    QRSCOUT_FIELD_IDENTIFIERS,
     HEADER_NAMES,
     qrScoutColumns,
     createDocument,

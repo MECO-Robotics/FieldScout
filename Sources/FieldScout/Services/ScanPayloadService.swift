@@ -34,7 +34,8 @@ enum ParsedScan: Equatable {
 }
 
 enum ScanPayloadService {
-    static let qrScoutEnvelopePrefix = "QRSCOUT1-"
+    static let qrScoutEnvelopePrefix = "QRSCOUT2-"
+    static let legacyQRScoutEnvelopePrefix = "QRSCOUT1-"
 
     static func normalizedPayload(_ rawPayload: String) -> String {
         var payload = rawPayload.trimmingCharacters(in: CharacterSet(charactersIn: " \r\n"))
@@ -82,12 +83,25 @@ enum ScanPayloadService {
 
         if payload.hasPrefix(qrScoutEnvelopePrefix) {
             let encoded = String(payload.dropFirst(qrScoutEnvelopePrefix.count))
-            var base64 = encoded
-                .replacingOccurrences(of: "-", with: "+")
-                .replacingOccurrences(of: "_", with: "/")
-            let padding = (4 - base64.count % 4) % 4
-            base64.append(String(repeating: "=", count: padding))
-            guard let data = Data(base64Encoded: base64),
+            guard let data = decodeBase64URL(encoded),
+                  let object = try? JSONSerialization.jsonObject(with: data),
+                  let envelope = object as? [String: Any],
+                  (envelope["v"] as? NSNumber)?.intValue == 2,
+                  let rawFields = envelope["fields"] as? [String: Any] else {
+                throw ScanPayloadError.unsupported
+            }
+            let fieldsByIdentifier = rawFields.reduce(into: [String: String]()) { result, entry in
+                result[entry.key] = stringify(entry.value)
+            }
+            guard let fields = QRScoutSchema.orderedValues(from: fieldsByIdentifier) else {
+                throw ScanPayloadError.unsupported
+            }
+            return .qrScoutLegacy(fields)
+        }
+
+        if payload.hasPrefix(legacyQRScoutEnvelopePrefix) {
+            let encoded = String(payload.dropFirst(legacyQRScoutEnvelopePrefix.count))
+            guard let data = decodeBase64URL(encoded),
                   let decoded = String(data: data, encoding: .utf8) else {
                 throw ScanPayloadError.unsupported
             }
@@ -97,6 +111,10 @@ enum ScanPayloadService {
             }
             return .qrScoutLegacy(fields)
         }
+
+        // A damaged or future QRScout envelope must fail closed instead of being
+        // accepted as a generic row and silently shifting values into wrong cells.
+        if payload.hasPrefix("QRSCOUT") { throw ScanPayloadError.unsupported }
 
         if payload.first == "{",
            let data = payload.data(using: .utf8),
@@ -156,5 +174,14 @@ enum ScanPayloadService {
             return json
         }
         return String(describing: value)
+    }
+
+    private static func decodeBase64URL(_ encoded: String) -> Data? {
+        var base64 = encoded
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padding = (4 - base64.count % 4) % 4
+        base64.append(String(repeating: "=", count: padding))
+        return Data(base64Encoded: base64)
     }
 }

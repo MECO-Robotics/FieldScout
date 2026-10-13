@@ -6,7 +6,7 @@ enum CSVError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .emptyFile: "The CSV file has no header row."
+        case .emptyFile: "The file has no scouting data."
         case .unreadableText: "The CSV file is not valid UTF-8 text."
         }
     }
@@ -17,13 +17,21 @@ enum CSVService {
         let data = try Data(contentsOf: url)
         guard let text = String(data: data, encoding: .utf8) else { throw CSVError.unreadableText }
         let records = parse(text)
-        guard let header = records.first, !header.isEmpty else { throw CSVError.emptyFile }
+        guard let firstRecord = records.first, !firstRecord.isEmpty else { throw CSVError.emptyFile }
 
         let columns: [SheetColumn]
-        if header == QRScoutSchema.headerNames {
+        let sourceRecords: ArraySlice<[String]>
+        let canonicalImportOrder: [Int]?
+        if let order = QRScoutSchema.importOrder(for: firstRecord) {
             columns = QRScoutSchema.columns()
+            sourceRecords = records.dropFirst()
+            canonicalImportOrder = order
+        } else if looksLikeHeaderlessQRScoutRow(firstRecord) {
+            columns = QRScoutSchema.columns()
+            sourceRecords = records[...]
+            canonicalImportOrder = Array(0..<QRScoutSchema.fieldCount)
         } else {
-            columns = header.enumerated().map { index, rawName in
+            columns = firstRecord.enumerated().map { index, rawName in
                 let name = rawName.isEmpty ? "Column \(index + 1)" : rawName
                 return SheetColumn(
                     name: name,
@@ -31,14 +39,23 @@ enum CSVService {
                     role: inferRole(from: name)
                 )
             }
+            sourceRecords = records.dropFirst()
+            canonicalImportOrder = nil
         }
 
-        let rows = records.dropFirst().filter { record in
+        let rows = sourceRecords.filter { record in
             record.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         }.map { record in
             var values: [UUID: String] = [:]
-            for (index, column) in columns.enumerated() where index < record.count {
-                values[column.id] = record[index]
+            if let canonicalImportOrder {
+                let ordered = canonicalImportOrder.map { $0 < record.count ? record[$0] : "" }
+                for (column, value) in zip(columns, QRScoutSchema.expandedLegacyFields(ordered)) {
+                    values[column.id] = value
+                }
+            } else {
+                for (index, column) in columns.enumerated() where index < record.count {
+                    values[column.id] = record[index]
+                }
             }
             return ScoutingRow(values: values)
         }
@@ -64,6 +81,11 @@ enum CSVService {
     }
 
     static func parse(_ text: String) -> [[String]] {
+        let cleaned = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+        return parse(cleaned, delimiter: detectedDelimiter(in: cleaned))
+    }
+
+    private static func parse(_ text: String, delimiter: Character) -> [[String]] {
         var rows: [[String]] = []
         var row: [String] = []
         var field = ""
@@ -87,7 +109,7 @@ enum CSVService {
             } else {
                 switch character {
                 case "\"": inQuotes = true
-                case ",":
+                case delimiter:
                     row.append(field)
                     field = ""
                 case "\n":
@@ -106,6 +128,33 @@ enum CSVService {
             rows.append(row)
         }
         return rows
+    }
+
+    private static func detectedDelimiter(in text: String) -> Character {
+        var counts: [Character: Int] = [",": 0, "\t": 0, ";": 0]
+        var inQuotes = false
+        var sawContent = false
+        for character in text {
+            if character == "\"" {
+                inQuotes.toggle()
+            } else if !inQuotes, character == "\n", sawContent {
+                break
+            } else if !inQuotes, counts[character] != nil {
+                counts[character, default: 0] += 1
+                sawContent = true
+            } else if !character.isWhitespace {
+                sawContent = true
+            }
+        }
+        return counts.max { left, right in left.value < right.value }?.value ?? 0 > 0
+            ? counts.max { left, right in left.value < right.value }!.key
+            : ","
+    }
+
+    private static func looksLikeHeaderlessQRScoutRow(_ row: [String]) -> Bool {
+        guard row.count == QRScoutSchema.fieldCount else { return false }
+        return Int(row[1].trimmingCharacters(in: .whitespacesAndNewlines)) != nil
+            && Int(row[2].trimmingCharacters(in: .whitespacesAndNewlines)) != nil
     }
 
     private static func escape(_ value: String) -> String {

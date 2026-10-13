@@ -59,4 +59,43 @@ final class CSVServiceTests: XCTestCase {
         XCTAssertEqual(document.columns[17].role, .breakdown)
         XCTAssertEqual(document.columns[24].role, .defenseRating)
     }
+
+    func testTabSeparatedQRScoutImportUsesCanonicalColumns() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("qrscout-\(UUID().uuidString).tsv")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var row = (0..<QRScoutSchema.fieldCount).map { "value-\($0)" }
+        row[1] = "44"
+        row[2] = "8324"
+        row[3] = "Depot Trench"
+        let order = [28] + Array(0..<28)
+        let text = order.map { QRScoutSchema.headerNames[$0] }.joined(separator: "\t") + "\n"
+            + order.map { row[$0] }.joined(separator: "\t") + "\n"
+        try text.write(to: url, atomically: true, encoding: .utf8)
+
+        let document = try CSVService.importDocument(from: url)
+
+        XCTAssertTrue(QRScoutSchema.matchesHeader(document.columns))
+        XCTAssertEqual(document.rows[0].values[document.columns[0].id], "value-0")
+        XCTAssertEqual(document.rows[0].values[document.columns[1].id], "44")
+        XCTAssertEqual(document.rows[0].values[document.columns[2].id], "8324")
+        XCTAssertEqual(document.rows[0].values[document.columns[28].id], "value-28")
+    }
+
+    func testHeaderlessQRScoutRowIsDataNotColumnNames() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("qrscout-row-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var row = (0..<QRScoutSchema.fieldCount).map { "field-\($0)" }
+        row[1] = "7"
+        row[2] = "254"
+        try (row.joined(separator: "\t") + "\n").write(to: url, atomically: true, encoding: .utf8)
+
+        let document = try CSVService.importDocument(from: url)
+
+        XCTAssertTrue(QRScoutSchema.matchesHeader(document.columns))
+        XCTAssertEqual(document.rows.count, 1)
+        XCTAssertEqual(document.rows[0].values[document.columns[2].id], "254")
+        XCTAssertEqual(document.rows[0].values[document.columns[28].id], "field-28")
+    }
 }

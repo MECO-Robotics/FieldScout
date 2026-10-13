@@ -187,9 +187,9 @@ ipcMain.handle("update:check", () => checkForUpdates(true));
 
 ipcMain.handle("csv:import", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: "Import scouting CSV",
+    title: "Import scouting data",
     properties: ["openFile"],
-    filters: [{ name: "CSV files", extensions: ["csv"] }]
+    filters: [{ name: "Scouting data", extensions: ["csv", "tsv", "txt"] }]
   });
   if (result.canceled || result.filePaths.length === 0) return { canceled: true };
   const filePath = result.filePaths[0];
