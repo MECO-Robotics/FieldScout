@@ -19,9 +19,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.6.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>14</string>
+	<string>15</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>FieldScout hosts the offline scouting form and receives completed match entries from iPads on the same local network.</string>
 	<key>NSBonjourServices</key>
