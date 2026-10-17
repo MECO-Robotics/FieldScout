@@ -113,6 +113,85 @@ enum QRScoutSchema {
         return fieldIdentifiers.map { fieldsByIdentifier[$0] ?? "" }
     }
 
+    /// Expands the scanner-sized QRSCOUT3 array into the same 29 visible values
+    /// produced by QRScout's spreadsheet payload. Every code and bitmask is
+    /// range-checked so a damaged scan cannot shift or invent column values.
+    static func expandedCompactValues(_ compact: [Any]) -> [String]? {
+        guard compact.count == fieldCount,
+              let initials = compact[0] as? String,
+              let comments = compact[28] as? String else { return nil }
+
+        func integer(_ index: Int, range: ClosedRange<Int>) -> Int? {
+            guard let number = compact[index] as? NSNumber else { return nil }
+            let value = number.intValue
+            guard number.doubleValue == Double(value), range.contains(value) else { return nil }
+            return value
+        }
+
+        func optionalNumber(_ index: Int, range: ClosedRange<Int>) -> String? {
+            guard let value = integer(index, range: -1...range.upperBound), value == -1 || range.contains(value) else { return nil }
+            return value == -1 ? "" : String(value)
+        }
+
+        func choice(_ index: Int, options: [String], emptyCode: Int? = nil) -> String? {
+            let upperBound = emptyCode ?? (options.count - 1)
+            guard let code = integer(index, range: 0...upperBound) else { return nil }
+            if code == emptyCode { return "" }
+            guard options.indices.contains(code) else { return nil }
+            return options[code]
+        }
+
+        func selections(_ index: Int, options: [String]) -> String? {
+            guard let mask = integer(index, range: 0...((1 << options.count) - 1)) else { return nil }
+            return options.indices.filter { mask & (1 << $0) != 0 }.map { options[$0] }.joined(separator: ",")
+        }
+
+        guard
+            let match = optionalNumber(1, range: 1...9999),
+            let team = optionalNumber(2, range: 1...99999),
+            let startingPosition = choice(3, options: [
+                "Outpost Trench", "Outpost Bump — Trench", "Outpost Bump — Hub", "Hub",
+                "Depot Bump — Hub", "Depot Bump — Trench", "Depot Trench"
+            ], emptyCode: 7),
+            let noShow = choice(4, options: ["false", "true"]),
+            let autoFuel = integer(5, range: 0...500),
+            let autoCollection = selections(6, options: [
+                "Outpost", "Depot", "Neutral Zone", "Neutral Zone — 2nd Pass",
+                "Did Not Move", "Moved Without Collecting"
+            ]),
+            let autoActions = selections(7, options: ["Passed", "Bump", "Trench"]),
+            let autoStuck = choice(8, options: ["false", "true"]),
+            let autoClimb = choice(9, options: ["No", "C", "F"]),
+            let teleopFuel = integer(10, range: 0...500),
+            let bumpTrench = selections(11, options: ["Bump", "Trench"]),
+            let defended = choice(12, options: ["false", "true"]),
+            let fuelFed = integer(13, range: 0...500),
+            let zoneActions = selections(14, options: ["Collecting", "Defense"]),
+            let endgameClimb = choice(15, options: ["No", "L1", "L2", "L3", "F"]),
+            let mechanical = choice(16, options: ["false", "true"]),
+            let died = choice(17, options: ["false", "true"]),
+            let tipped = choice(18, options: ["false", "true"]),
+            let scoringEffectiveness = integer(19, range: 0...5),
+            let scoredHow = choice(20, options: ["driving", "stationary", "both", "none"], emptyCode: 4),
+            let scoringLocation = selections(21, options: [
+                "Outpost Trench", "Outpost", "Hub", "Ladder", "Depot", "Depot Trench"
+            ]),
+            let passingSkill = integer(22, range: 0...5),
+            let passedHow = choice(23, options: ["driving", "stationary", "both", "none"], emptyCode: 4),
+            let defenseSkill = integer(24, range: 0...5),
+            let card = choice(25, options: ["No Card", "Yellow", "Red"]),
+            let firstPick = choice(26, options: ["Yes", "May", "No"], emptyCode: 3),
+            let secondPick = choice(27, options: ["Yes", "May", "No"], emptyCode: 3)
+        else { return nil }
+
+        return [
+            initials, match, team, startingPosition, noShow, String(autoFuel), autoCollection, autoActions,
+            autoStuck, autoClimb, String(teleopFuel), bumpTrench, defended, String(fuelFed), zoneActions,
+            endgameClimb, mechanical, died, tipped, String(scoringEffectiveness), scoredHow, scoringLocation,
+            String(passingSkill), passedHow, String(defenseSkill), card, firstPick, secondPick, comments
+        ]
+    }
+
     /// Returns the input column index for each canonical QRScout column. Matching
     /// includes duplicate-header occurrence numbers, so the two Fuel Scored and
     /// Climbed columns remain distinct.

@@ -70,6 +70,40 @@ test("scanner decodes the legacy keyboard-safe QRScout envelope", () => {
   assert.equal(core.isCompleteAutomaticScan(payload), true);
 });
 
+test("version three compact envelope expands all fields without shifting", () => {
+  const compact = [
+    "AJ", 12, 8324, 0, 0, 500, 5, 3, 1, 1,
+    450, 3, 1, 300, 3, 3, 1, 0, 1, 5,
+    2, 5, 4, 1, 5, 1, 0, 1, "solid"
+  ];
+  const payload = `QRSCOUT3-${Buffer.from(JSON.stringify(compact), "utf8").toString("base64url")}`;
+  const expected = [
+    "AJ", "12", "8324", "Outpost Trench", "false", "500", "Outpost, Neutral Zone", "Passed, Bump", "true", "C",
+    "450", "Bump, Trench", "true", "300", "Collecting, Defense", "L3", "true", "false", "true",
+    "5", "both", "Outpost Trench, Hub", "4", "stationary", "5", "Yellow", "Yes", "May", "solid"
+  ];
+
+  const result = core.ingestScan(core.createDocument(), payload);
+
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.document.columns.map((column) => result.document.rows[0].values[column.id]), expected);
+  assert.equal(core.isCompleteAutomaticScan(payload), true);
+  assert.ok(payload.length <= 245);
+});
+
+test("version three compact envelope rejects missing or invalid codes", () => {
+  const shortPayload = `QRSCOUT3-${Buffer.from(JSON.stringify(["too", "short"]), "utf8").toString("base64url")}`;
+  assert.throws(() => core.ingestScan(core.createDocument(), shortPayload), /incomplete or damaged/);
+
+  const compact = [
+    "AJ", 12, 8324, 99, 0, 500, 5, 3, 1, 1,
+    450, 3, 1, 300, 3, 3, 1, 0, 1, 5,
+    2, 5, 4, 1, 5, 1, 0, 1, "solid"
+  ];
+  const invalidPayload = `QRSCOUT3-${Buffer.from(JSON.stringify(compact), "utf8").toString("base64url")}`;
+  assert.throws(() => core.ingestScan(core.createDocument(), invalidPayload), /incomplete or damaged/);
+});
+
 test("version two scanner envelope maps named fields to exact columns", () => {
   const fields = Array.from({ length: 29 }, (_value, index) => `field ${index} — value`);
   const entries = core.QRSCOUT_FIELD_IDENTIFIERS.map((identifier, index) => [identifier, fields[index]]).reverse();

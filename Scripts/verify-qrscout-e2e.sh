@@ -6,8 +6,13 @@ repository_root="$(cd "$(dirname "$0")/.." && pwd)"
 qrscout_source="$repository_root/work/QRScout-Legacy-public"
 payload="$("$qrscout_source/scripts/test.sh" --emit-scanner-payload)"
 
-if [[ "$payload" != QRSCOUT2-* ]]; then
-    echo "QRScout did not emit a version 2 scanner record." >&2
+if [[ "$payload" != QRSCOUT3-* ]]; then
+    echo "QRScout did not emit a compact version 3 scanner record." >&2
+    exit 1
+fi
+
+if (( ${#payload} > 245 )); then
+    echo "QRScout emitted ${#payload} characters, exceeding the S-1103T's 245-character limit." >&2
     exit 1
 fi
 

@@ -2,6 +2,15 @@ import XCTest
 @testable import FieldScout
 
 final class ScanPayloadServiceTests: XCTestCase {
+    private func scannerPayload(prefix: String, object: Any) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return prefix + encoded
+    }
+
     func testParsesNamedScannerPayload() throws {
         let result = try ScanPayloadService.parse("team=254;match=12;brokeDown=no")
 
@@ -51,6 +60,40 @@ final class ScanPayloadServiceTests: XCTestCase {
 
         XCTAssertEqual(try ScanPayloadService.parse(payload), .qrScoutLegacy(values))
         XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(payload))
+    }
+
+    func testVersionThreeCompactEnvelopeExpandsEveryFieldWithoutShifting() throws {
+        let compact: [Any] = [
+            "AJ", 12, 8324, 0, 0, 500, 5, 3, 1, 1,
+            450, 3, 1, 300, 3, 3, 1, 0, 1, 5,
+            2, 5, 4, 1, 5, 1, 0, 1, "solid"
+        ]
+        let payload = try scannerPayload(prefix: ScanPayloadService.compactQRScoutEnvelopePrefix, object: compact)
+        let expected = [
+            "AJ", "12", "8324", "Outpost Trench", "false", "500", "Outpost,Neutral Zone", "Passed,Bump", "true", "C",
+            "450", "Bump,Trench", "true", "300", "Collecting,Defense", "L3", "true", "false", "true",
+            "5", "both", "Outpost Trench,Hub", "4", "stationary", "5", "Yellow", "Yes", "May", "solid"
+        ]
+
+        XCTAssertEqual(try ScanPayloadService.parse(payload), .qrScoutLegacy(expected))
+        XCTAssertTrue(ScanPayloadService.isCompleteAutomaticScan(payload))
+        XCTAssertLessThanOrEqual(payload.count, 245)
+    }
+
+    func testVersionThreeCompactEnvelopeRejectsMissingOrInvalidCodes() throws {
+        XCTAssertThrowsError(try ScanPayloadService.parse(
+            try scannerPayload(prefix: ScanPayloadService.compactQRScoutEnvelopePrefix, object: ["too", "short"])
+        ))
+
+        var invalid: [Any] = [
+            "AJ", 12, 8324, 0, 0, 500, 5, 3, 1, 1,
+            450, 3, 1, 300, 3, 3, 1, 0, 1, 5,
+            2, 5, 4, 1, 5, 1, 0, 1, "solid"
+        ]
+        invalid[3] = 99
+        XCTAssertThrowsError(try ScanPayloadService.parse(
+            try scannerPayload(prefix: ScanPayloadService.compactQRScoutEnvelopePrefix, object: invalid)
+        ))
     }
 
     func testVersionTwoEnvelopeUsesStableFieldIdentitiesInsteadOfDictionaryOrder() throws {

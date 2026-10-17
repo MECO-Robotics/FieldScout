@@ -34,6 +34,7 @@ enum ParsedScan: Equatable {
 }
 
 enum ScanPayloadService {
+    static let compactQRScoutEnvelopePrefix = "QRSCOUT3-"
     static let qrScoutEnvelopePrefix = "QRSCOUT2-"
     static let legacyQRScoutEnvelopePrefix = "QRSCOUT1-"
 
@@ -80,6 +81,17 @@ enum ScanPayloadService {
         // Preserve leading and trailing tabs because empty first/last QRScout fields are significant.
         let payload = normalizedPayload(rawPayload)
         guard !payload.isEmpty else { throw ScanPayloadError.empty }
+
+        if payload.hasPrefix(compactQRScoutEnvelopePrefix) {
+            let encoded = String(payload.dropFirst(compactQRScoutEnvelopePrefix.count))
+            guard let data = decodeBase64URL(encoded),
+                  let object = try? JSONSerialization.jsonObject(with: data),
+                  let compactFields = object as? [Any],
+                  let fields = QRScoutSchema.expandedCompactValues(compactFields) else {
+                throw ScanPayloadError.unsupported
+            }
+            return .qrScoutLegacy(fields)
+        }
 
         if payload.hasPrefix(qrScoutEnvelopePrefix) {
             let encoded = String(payload.dropFirst(qrScoutEnvelopePrefix.count))

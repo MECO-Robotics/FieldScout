@@ -43,6 +43,7 @@
     "tfs", "bt", "dbo", "ff", "oza", "ecl", "mi", "di", "ti", "se",
     "sh", "sl", "fps", "ph", "ds", "ca", "fp", "s2p", "co"
   ];
+  const COMPACT_QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT3-";
   const QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT2-";
   const LEGACY_QRSCOUT_ENVELOPE_PREFIX = "QRSCOUT1-";
   const SCOUT_FACING_VALUES = {
@@ -337,19 +338,79 @@
       .replace(/[⇥\v\u001d\u001e\u001f]/g, "\t");
   }
 
+  function decodeBase64URLJSON(encoded) {
+    let base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    base64 += "=".repeat((4 - (base64.length % 4)) % 4);
+    const binary = globalThis.atob(base64);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  function expandCompactQRScout(compact) {
+    if (!Array.isArray(compact) || compact.length !== QRSCOUT_FIELDS.length
+        || typeof compact[0] !== "string" || typeof compact[28] !== "string") return null;
+
+    const integer = (index, minimum, maximum) => {
+      const value = compact[index];
+      return typeof value === "number" && Number.isInteger(value) && value >= minimum && value <= maximum
+        ? value
+        : null;
+    };
+    const optionalNumber = (index, minimum, maximum) => {
+      const value = integer(index, -1, maximum);
+      return value === -1 ? "" : (value !== null && value >= minimum ? String(value) : null);
+    };
+    const choice = (index, options, emptyCode = null) => {
+      const upperBound = emptyCode === null ? options.length - 1 : emptyCode;
+      const code = integer(index, 0, upperBound);
+      if (code === null) return null;
+      if (code === emptyCode) return "";
+      return options[code] ?? null;
+    };
+    const selections = (index, options) => {
+      const mask = integer(index, 0, (1 << options.length) - 1);
+      if (mask === null) return null;
+      return options.filter((_option, optionIndex) => (mask & (1 << optionIndex)) !== 0).join(",");
+    };
+
+    const fields = [
+      compact[0], optionalNumber(1, 1, 9999), optionalNumber(2, 1, 99999),
+      choice(3, ["Outpost Trench", "Outpost Bump — Trench", "Outpost Bump — Hub", "Hub", "Depot Bump — Hub", "Depot Bump — Trench", "Depot Trench"], 7),
+      choice(4, ["false", "true"]), integer(5, 0, 500),
+      selections(6, ["Outpost", "Depot", "Neutral Zone", "Neutral Zone — 2nd Pass", "Did Not Move", "Moved Without Collecting"]),
+      selections(7, ["Passed", "Bump", "Trench"]), choice(8, ["false", "true"]),
+      choice(9, ["No", "C", "F"]), integer(10, 0, 500), selections(11, ["Bump", "Trench"]),
+      choice(12, ["false", "true"]), integer(13, 0, 500), selections(14, ["Collecting", "Defense"]),
+      choice(15, ["No", "L1", "L2", "L3", "F"]), choice(16, ["false", "true"]),
+      choice(17, ["false", "true"]), choice(18, ["false", "true"]), integer(19, 0, 5),
+      choice(20, ["driving", "stationary", "both", "none"], 4),
+      selections(21, ["Outpost Trench", "Outpost", "Hub", "Ladder", "Depot", "Depot Trench"]),
+      integer(22, 0, 5), choice(23, ["driving", "stationary", "both", "none"], 4), integer(24, 0, 5),
+      choice(25, ["No Card", "Yellow", "Red"]), choice(26, ["Yes", "May", "No"], 3),
+      choice(27, ["Yes", "May", "No"], 3), compact[28]
+    ];
+    if (fields.some((value) => value === null)) return null;
+    return fields.map((value) => typeof value === "number" ? String(value) : value);
+  }
+
   function parseScan(raw) {
     const preserved = normalizeScannerPayload(raw);
     if (!preserved) throw new Error("Scan a barcode before adding it.");
 
+    if (preserved.startsWith(COMPACT_QRSCOUT_ENVELOPE_PREFIX)) {
+      try {
+        const compact = decodeBase64URLJSON(preserved.slice(COMPACT_QRSCOUT_ENVELOPE_PREFIX.length));
+        const fields = expandCompactQRScout(compact);
+        if (!fields) throw new Error("wrong compact fields");
+        return { kind: "qrScout", fields };
+      } catch (_error) {
+        throw new Error("This QRScout barcode is incomplete or damaged. Scan it again.");
+      }
+    }
+
     if (preserved.startsWith(QRSCOUT_ENVELOPE_PREFIX)) {
       try {
-        let base64 = preserved.slice(QRSCOUT_ENVELOPE_PREFIX.length)
-          .replace(/-/g, "+")
-          .replace(/_/g, "/");
-        base64 += "=".repeat((4 - (base64.length % 4)) % 4);
-        const binary = globalThis.atob(base64);
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        const envelope = decodeBase64URLJSON(preserved.slice(QRSCOUT_ENVELOPE_PREFIX.length));
         if (envelope?.v !== 2 || !envelope.fields || typeof envelope.fields !== "object" || Array.isArray(envelope.fields)) {
           throw new Error("wrong envelope");
         }
